@@ -387,8 +387,10 @@
       document.getElementById('scan-result').classList.add('hidden');
     }
 
-    // --- History Logic ---
-    function saveToHistory() {
+    // --- Cloud History Logic (Google Sheets) ---
+    const API_URL = "https://script.google.com/macros/s/AKfycbyRCzQMaoYgXH5yMHvPd2aOnHJlxdQ_GPI5M4BSP1I6pVXYmDcX283s1p08V9gTJ81Z/exec";
+
+    async function saveToHistory() {
       const activeItems = rowData.filter(r => r.phyid || r.to);
       if (activeItems.length === 0) return;
 
@@ -399,27 +401,65 @@
         totalQty: document.getElementById('total-qty').innerText
       };
 
-      const history = JSON.parse(localStorage.getItem('dhl_history') || '[]');
-      history.unshift(historyItem); // Add to top
-      localStorage.setItem('dhl_history', JSON.stringify(history));
-      
-      alert('✅ บันทึกประวัติเรียบร้อย');
+      // Save Local first (Backup)
+      const localHistory = JSON.parse(localStorage.getItem('dhl_history') || '[]');
+      localHistory.unshift(historyItem);
+      localStorage.setItem('dhl_history', JSON.stringify(localHistory));
+
+      // Save to Cloud
+      try {
+        await fetch(API_URL, {
+          method: 'POST',
+          mode: 'no-cors', // Important for Google Apps Script
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(historyItem)
+        });
+        alert('✅ บันทึกออนไลน์เรียบร้อย!');
+      } catch (err) {
+        console.error(err);
+        alert('⚠️ บันทึกออนไลน์ไม่สำเร็จ (แต่บันทึกลงเครื่องแล้ว)');
+      }
     }
 
-    function showHistory() {
+    async function showHistory() {
       const modal = document.getElementById('history-modal');
       const list = document.getElementById('history-list');
-      const history = JSON.parse(localStorage.getItem('dhl_history') || '[]');
-
+      
       modal.classList.remove('hidden');
-      modal.classList.add('flex'); // Ensure flex behavior for centering
+      modal.classList.add('flex');
+      list.innerHTML = '<p class="text-center text-gray-500 mt-10">⏳ กำลังโหลดข้อมูลจากออนไลน์...</p>';
 
+      try {
+        const response = await fetch(API_URL);
+        const cloudHistory = await response.json();
+        
+        if (!cloudHistory || cloudHistory.length === 0) {
+           // Fallback to local if empty
+           const local = JSON.parse(localStorage.getItem('dhl_history') || '[]');
+           renderHistoryList(local, "Local (Offline)");
+        } else {
+           renderHistoryList(cloudHistory, "Online Cloud ☁️");
+        }
+
+      } catch (err) {
+        console.error(err);
+        // Fallback to local
+        const local = JSON.parse(localStorage.getItem('dhl_history') || '[]');
+        renderHistoryList(local, "Local (Offline Mode)");
+      }
+    }
+
+    function renderHistoryList(history, sourceLabel) {
+      const list = document.getElementById('history-list');
+      
       if (history.length === 0) {
         list.innerHTML = '<p class="text-center text-gray-400 mt-10">ยังไม่มีประวัติ</p>';
         return;
       }
 
-      list.innerHTML = history.map(h => `
+      list.innerHTML = `
+        <div class="text-xs text-right text-gray-400 mb-2">แหล่งข้อมูล: ${sourceLabel}</div>
+        ${history.map(h => `
         <div class="bg-white p-3 rounded shadow-sm border border-gray-200">
           <div class="flex justify-between items-center mb-2">
             <div>
@@ -427,8 +467,7 @@
               <span class="text-sm text-gray-500 ml-2">(${h.items.length} รายการ, ${h.totalQty || 0} กล่อง)</span>
             </div>
             <div class="space-x-1">
-              <button onclick="loadHistoryItem(${h.id})" class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200">📥 โหลด</button>
-              <button onclick="deleteHistoryItem(${h.id})" class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200">🗑️ ลบ</button>
+              <button onclick='loadHistoryItem(${JSON.stringify(h)})' class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200">📥 โหลด</button>
             </div>
           </div>
           <div class="text-xs text-gray-600 overflow-x-auto">
@@ -443,25 +482,19 @@
             </table>
           </div>
         </div>
-      `).join('');
+      `).join('')}`;
     }
 
-    function closeHistory() {
-      document.getElementById('history-modal').classList.add('hidden');
-    }
+    function loadHistoryItem(itemOrId) {
+      // Handle both object (from cloud) and ID (legacy local)
+      let item = itemOrId;
+      if (typeof itemOrId === 'number') {
+         const history = JSON.parse(localStorage.getItem('dhl_history') || '[]');
+         item = history.find(h => h.id === itemOrId);
+      }
 
-    function deleteHistoryItem(id) {
-      if(!confirm('ยืนยันลบประวัตินี้?')) return;
-      let history = JSON.parse(localStorage.getItem('dhl_history') || '[]');
-      history = history.filter(h => h.id !== id);
-      localStorage.setItem('dhl_history', JSON.stringify(history));
-      showHistory(); // Refresh list
-    }
+      if(!confirm(`ต้องการโหลดข้อมูลวันที่ ${item.timestamp} มาแทนที่ข้อมูลปัจจุบัน?`)) return;
 
-    function loadHistoryItem(id) {
-      if(!confirm('ต้องการโหลดข้อมูลนี้มาแทนที่ข้อมูลปัจจุบัน?')) return;
-      const history = JSON.parse(localStorage.getItem('dhl_history') || '[]');
-      const item = history.find(h => h.id === id);
       if (item) {
         // Clear current
         rowData = Array(MAX_ROWS).fill({ phyid: "", to: "", qty: "" }); 

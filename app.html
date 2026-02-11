@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบสแกนและพิมพ์ใบสินค้า</title>
+  
+  <!-- TailwindCSS (Optional, just for quick styling) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Tesseract.js (Client-side OCR) -->
+  <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
+  <!-- html2pdf.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+  <style>
+    @media print {
+      body { margin: 0; padding: 0; background: white; }
+      .no-print { display: none !important; }
+      .print-only { display: block !important; }
+      /* A4 size for printing */
+      @page {
+        size: A4 portrait;
+        margin: 1cm;
+      }
+      .print-container {
+        width: 100% !important;
+        max-width: 210mm !important;
+        height: auto;
+        min-height: 297mm;
+        padding: 20px;
+        box-shadow: none !important;
+        margin: 0 auto;
+        border: none;
+      }
+      .form-table {
+        font-size: 14pt;
+        width: 100%;
+        margin-top: 15px;
+      }
+      .form-table th, .form-table td {
+        padding: 8px;
+        height: 35px;
+      }
+      .form-table input {
+        font-size: 14pt;
+      }
+      .footer-note, .signatures {
+        margin-top: 30px;
+      }
+    }
+    .print-only { display: none; }
+    
+    /* Table styling for form */
+    .form-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-family: "Sarabun", sans-serif;
+    }
+    .form-table th, .form-table td {
+      border: 1px solid black;
+      padding: 5px;
+      text-align: center;
+      height: 25px;
+    }
+    .form-table th {
+      background-color: #d8af28;
+      font-weight: bold;
+    }
+    .form-table input {
+      width: 95%;
+      border: none;
+      font-family: inherit;
+      font-size: inherit;
+      text-align: center;
+      outline: none;
+      background: transparent;
+    }
+    .col-no { width: 5%; background-color: #e0e0e0; }
+    .col-phyid { width: 45%; }
+    .col-to { width: 30%; }
+    .col-qty { width: 20%; }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+  <!-- --- App UI (Hidden when printing) --- -->
+  <div class="no-print max-w-4xl mx-auto p-4">
+    <header class="bg-white p-4 rounded shadow mb-4 flex justify-between items-center">
+      <h1 class="text-xl font-bold text-gray-800">📦 ระบบสแกนใบสินค้า (โยก/เคลม)</h1>
+      <div class="text-sm text-gray-500" id="date-app-header"></div>
+    </header>
+
+    <div class="bg-white p-4 rounded shadow mb-4">
+      <div class="flex flex-col md:flex-row gap-4">
+        
+          <!-- Scan / Camera Input -->
+          <div class="flex-1 border-2 border-dashed border-gray-300 rounded p-6 text-center hover:bg-gray-50 transition cursor-pointer relative" onclick="document.getElementById('file-input').click()">
+            <input type="file" id="file-input" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
+            <div class="text-4xl mb-2">📸</div>
+            <p class="font-bold text-gray-700">แตะเพื่อถ่ายรูป / เลือกรูป</p>
+            <p class="text-sm text-gray-500">ใบปะหน้า DHL</p>
+          
+          <!-- Loading Overlay -->
+          <div id="loading-overlay" class="absolute inset-0 bg-white/80 hidden flex-col items-center justify-center rounded">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
+            <p class="text-sm font-bold text-blue-600">กำลังอ่านข้อมูล...</p>
+          </div>
+        </div>
+
+        <!-- Manual Add -->
+        <div class="flex-1 bg-gray-50 rounded p-4 border border-gray-200">
+          <h3 class="font-bold mb-2">เพิ่มเอง (Manual)</h3>
+          <div class="grid grid-cols-3 gap-2 mb-2">
+            <input type="text" id="manual-phyid" placeholder="PHYID" class="border p-2 rounded text-sm w-full">
+            <input type="text" id="manual-to" placeholder="To" class="border p-2 rounded text-sm w-full">
+            <input type="number" id="manual-qty" placeholder="Qty" class="border p-2 rounded text-sm w-full" value="1">
+          </div>
+          <button onclick="addManualEntry()" class="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700">➕ เพิ่มรายการ</button>
+        </div>
+
+      </div>
+      
+      <!-- Scan Result Preview -->
+      <div id="scan-result" class="mt-4 p-4 rounded text-sm hidden">
+        <div id="scan-status" class="font-bold mb-2"></div>
+        <div id="scan-details" class="text-xs text-gray-500 bg-gray-100 p-2 rounded mt-2 hidden whitespace-pre-wrap font-mono border"></div>
+        <button onclick="toggleDetails()" class="text-xs text-blue-500 underline mt-2">ดูข้อความที่อ่านได้ (Debug)</button>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex justify-end gap-2 mb-8">
+      <button onclick="clearTable()" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">🗑️ ล้างทั้งหมด</button>
+      <button onclick="exportToPDF()" class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 font-bold shadow">📄 Export PDF</button>
+      <button onclick="window.print()" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 font-bold shadow">🖨️ พิมพ์เอกสาร</button>
+    </div>
+
+    <!-- Confirm Modal -->
+    <div id="confirm-modal" class="fixed inset-0 bg-black/50 hidden flex items-center justify-center z-50 p-4">
+      <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+        <h3 class="text-lg font-bold mb-4">ตรวจสอบข้อมูล</h3>
+        
+        <div class="mb-4">
+          <label class="block text-sm font-bold mb-1">PHYID</label>
+          <input type="text" id="confirm-phyid" class="w-full border p-2 rounded text-lg font-mono bg-gray-50">
+        </div>
+        
+        <div class="flex gap-4 mb-6">
+          <div class="flex-1">
+            <label class="block text-sm font-bold mb-1">To</label>
+            <input type="text" id="confirm-to" class="w-full border p-2 rounded text-lg font-mono bg-gray-50">
+          </div>
+          <div class="w-1/3">
+            <label class="block text-sm font-bold mb-1">Qty</label>
+            <input type="number" id="confirm-qty" class="w-full border p-2 rounded text-lg font-mono bg-gray-50">
+          </div>
+        </div>
+
+        <div class="flex gap-2">
+          <button onclick="closeModal()" class="flex-1 py-3 rounded border border-gray-300 hover:bg-gray-100 text-gray-700">ยกเลิก</button>
+          <button onclick="confirmAdd()" class="flex-1 py-3 rounded bg-blue-600 hover:bg-blue-700 text-white font-bold">✅ ยืนยันเพิ่ม</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+
+    <div class="print-container bg-white max-w-[210mm] mx-auto p-[20px] shadow-lg mb-8" id="print-area">
+      
+      <div class="border border-black p-1 font-bold bg-gray-100 text-center mb-2" style="background-color: #f0f0f0;">
+        ใบยืนยันการรับสินค้า โยก และ สินค้าเคลม (ส่งซ่อม 166+33)
+      </div>
+
+      <div class="flex justify-between font-bold my-2" style="display: flex; justify-content: space-between;">
+        <div>จากสาขา ID 645</div>
+        <div id="date-display">11/2/2026</div>
+      </div>
+
+      <table class="form-table">
+        <thead>
+          <tr>
+            <th class="col-no">No</th>
+            <th class="col-phyid">PHYID</th>
+            <th class="col-to">to</th>
+            <th class="col-qty">จำนวน(กล่อง)</th>
+          </tr>
+        </thead>
+        <tbody id="table-body">
+          <!-- Rows will be generated by JS -->
+        </tbody>
+      </table>
+
+      <div class="text-center font-bold text-sm mt-2 footer-note">
+        ***สามารถเขียนบิลเพิ่มได้ (Stock Out PhyID. ของโยก)***
+      </div>
+
+      <div class="flex justify-between mt-12 px-12 signatures" style="display: flex; justify-content: space-between; margin-top: 50px; padding: 0 50px;">
+        <div class="text-center">
+          <div>ผู้ส่งสินค้า(หน้าร้าน)</div>
+          <div class="mt-8 border-t border-dotted border-black w-40 mx-auto" style="margin-top: 30px; border-top: 1px dotted black; width: 150px;"></div>
+        </div>
+        <div class="text-center">
+          <div>ผู้รับสินค้า(ขนส่ง)</div>
+          <div class="mt-8 border-t border-dotted border-black w-40 mx-auto" style="margin-top: 30px; border-top: 1px dotted black; width: 150px;"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <script>
+    async function exportToPDF() {
+      const element = document.getElementById('print-area');
+      element.classList.remove('hidden'); 
+      
+      const opt = {
+        margin:       [5, 0, 5, 0], // Top, Left, Bottom, Right (Minimal margins)
+        filename:     `shipping_confirm_${new Date().toISOString().slice(0,10)}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, scrollY: 0, useCORS: true },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      // Ensure inputs are visible in PDF
+      const inputs = element.querySelectorAll('input');
+      inputs.forEach(input => {
+        input.setAttribute('value', input.value);
+      });
+
+      await html2pdf().set(opt).from(element).save();
+    }
+
+    // --- Config ---
+    const MAX_ROWS = 18;
+    let rowData = Array(MAX_ROWS).fill({ phyid: "", to: "", qty: "" });
+    let currentRowIndex = 0;
+
+    // --- Init ---
+    window.onload = function() {
+      renderTable();
+      updateDate();
+    };
+
+    function updateDate() {
+      const now = new Date();
+      const dateStr = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
+      document.getElementById('date-display').innerText = dateStr;
+      document.getElementById('date-app-header').innerText = dateStr;
+    }
+
+    // --- Table Logic ---
+    function renderTable() {
+      const tbody = document.getElementById('table-body');
+      tbody.innerHTML = '';
+      let totalQty = 0;
+
+      for (let i = 0; i < MAX_ROWS; i++) {
+        const item = rowData[i];
+        
+        // Sum up quantity (safely)
+        if (item.qty && !isNaN(item.qty)) {
+            totalQty += parseInt(item.qty);
+        }
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td class="col-no" style="background-color: #e0e0e0;">${i + 1}</td>
+          <td><input type="text" value="${item.phyid}" onchange="updateRow(${i}, 'phyid', this.value)"></td>
+          <td><input type="text" value="${item.to}" onchange="updateRow(${i}, 'to', this.value)"></td>
+          <td><input type="number" value="${item.qty}" onchange="updateRow(${i}, 'qty', this.value)"></td>
+        `;
+        tbody.appendChild(row);
+      }
+      
+      // Update Total
+      document.getElementById('total-qty').innerText = totalQty;
+    }
+
+    function updateRow(index, field, value) {
+      rowData[index][field] = value;
+      
+      // Recalculate total if qty changed
+      if (field === 'qty') {
+          let totalQty = 0;
+          for (let i = 0; i < MAX_ROWS; i++) {
+            const q = rowData[i].qty;
+            if (q && !isNaN(q)) totalQty += parseInt(q);
+          }
+          document.getElementById('total-qty').innerText = totalQty;
+      }
+
+      // Auto advance current index if user fills a row manually
+      if (rowData[index].phyid && rowData[index].to) {
+        currentRowIndex = Math.max(currentRowIndex, index + 1);
+      }
+    }
+
+    function addEntry(phyid, to, qty) {
+      if (currentRowIndex >= MAX_ROWS) {
+        alert('เต็มแล้วครับ (ครบ 18 รายการ)');
+        return;
+      }
+      rowData[currentRowIndex] = { phyid, to, qty };
+      currentRowIndex++;
+      renderTable();
+    }
+
+    function clearTable() {
+      if(confirm('ล้างข้อมูลทั้งหมด?')) {
+        rowData = Array(MAX_ROWS).fill({ phyid: "", to: "", qty: "" }); // Reset reference properly
+        // Fix: fill with new objects
+        for(let i=0; i<MAX_ROWS; i++) rowData[i] = { phyid: "", to: "", qty: "" };
+        currentRowIndex = 0;
+        renderTable();
+        document.getElementById('scan-result').classList.add('hidden');
+      }
+    }
+
+    function addManualEntry() {
+      const phyid = document.getElementById('manual-phyid').value;
+      const to = document.getElementById('manual-to').value;
+      const qty = document.getElementById('manual-qty').value;
+      
+      if (phyid && to) {
+        addEntry(phyid, to, qty);
+        // Clear inputs
+        document.getElementById('manual-phyid').value = '';
+        document.getElementById('manual-to').value = '';
+        document.getElementById('manual-qty').value = '1';
+      } else {
+        alert('กรุณากรอก PHYID และ To');
+      }
+    }
+
+    // --- OCR Logic ---
+    function toggleDetails() {
+      document.getElementById('scan-details').classList.toggle('hidden');
+    }
+
+    async function handleImageUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const loading = document.getElementById('loading-overlay');
+      const resultBox = document.getElementById('scan-result');
+      const statusText = document.getElementById('scan-status');
+      const detailsText = document.getElementById('scan-details');
+
+      loading.classList.remove('hidden');
+      loading.classList.add('flex');
+      resultBox.classList.add('hidden'); // Hide until finished
+
+      try {
+        const worker = await Tesseract.createWorker('eng'); // English is usually enough for codes
+        const ret = await worker.recognize(file);
+        const text = ret.data.text;
+        
+        console.log("OCR Result:", text);
+        detailsText.innerText = "ข้อความดิบที่อ่านได้:\n" + text;
+        
+        await worker.terminate();
+
+        // Parse Logic
+        const parsed = parseDHLText(text);
+        
+        resultBox.classList.remove('hidden');
+        if (parsed) {
+          // Show Modal instead of adding directly
+          showConfirmModal(parsed.phyid, parsed.to, parsed.qty);
+          statusText.innerHTML = "👀 พบข้อมูล! กรุณาตรวจสอบก่อนเพิ่ม";
+          resultBox.className = "mt-4 p-4 rounded bg-blue-50 border border-blue-200 text-blue-800";
+        } else {
+          statusText.innerHTML = "❌ อ่านข้อมูลไม่พบ!<br>ลองถ่ายให้ชัดเจน หรือกรอกเองด้านบนครับ";
+          resultBox.className = "mt-4 p-4 rounded bg-red-50 border border-red-200 text-red-800";
+        }
+
+      } catch (err) {
+        console.error(err);
+        alert('เกิดข้อผิดพลาด: ' + err.message);
+      } finally {
+        loading.classList.add('hidden');
+        loading.classList.remove('flex');
+        document.getElementById('file-input').value = '';
+      }
+    }
+
+    function showConfirmModal(phyid, to, qty) {
+      document.getElementById('confirm-phyid').value = phyid;
+      document.getElementById('confirm-to').value = to;
+      document.getElementById('confirm-qty').value = qty;
+      document.getElementById('confirm-modal').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('confirm-modal').classList.add('hidden');
+    }
+
+    function confirmAdd() {
+      const phyid = document.getElementById('confirm-phyid').value;
+      const to = document.getElementById('confirm-to').value;
+      const qty = document.getElementById('confirm-qty').value;
+      
+      if (phyid && to) {
+        addEntry(phyid, to, qty);
+        closeModal();
+        document.getElementById('scan-status').innerHTML = `✅ เพิ่มสำเร็จ: ${phyid} -> ${to}`;
+        document.getElementById('scan-result').className = "mt-4 p-4 rounded bg-green-50 border border-green-200 text-green-800";
+      } else {
+        alert("กรุณากรอกข้อมูลให้ครบ");
+      }
+    }
+
+    function parseDHLText(text) {
+      // Common OCR Fixes (1 vs I, 0 vs O, etc.)
+      let cleanText = text
+        .replace(/PHY1D/gi, 'PHYID')
+        .replace(/Ref\s?1D/gi, 'Ref ID')
+        .replace(/\b1D(\d{2,})/g, 'ID$1') // Fix 1D1807 -> ID1807
+        .replace(/\b1D(\d{2})/g, 'ID$1')  // Fix 1D33 -> ID33
+        .replace(/lD(\d+)/g, 'ID$1')      // Fix lD33 -> ID33
+        .replace(/\|D(\d+)/g, 'ID$1');    // Fix |D33 -> ID33
+
+      let phyid = "";
+      let to = "";
+      let qty = "1";
+
+      // --- PHYID Patterns ---
+      // 1. "Ref ID: ..." (Grab the whole ID string until newline or long space)
+      const refMatch = cleanText.match(/Ref\s?ID[:\s]*([^\n\r]+)/i);
+      
+      if (refMatch) {
+        let rawId = refMatch[1].trim();
+        const parts = rawId.split(/\s+/);
+        if (parts.length > 0) phyid = parts[0]; 
+      } 
+      
+      // Fallback: Look specifically for PHYID or SMART if Ref ID line missed
+      if (!phyid) {
+        // Fix: PHY1D -> PHYID explicitly before fallback
+        cleanText = cleanText.replace(/PHY1D/gi, 'PHYID');
+        const phyidMatch = cleanText.match(/(PHYID[\w-]+)/i);
+        const smartMatch = cleanText.match(/(SMART-[\w-]+)/i);
+        
+        if (phyidMatch) phyid = phyidMatch[1];
+        else if (smartMatch) phyid = smartMatch[1];
+      }
+
+
+      // --- To Patterns ---
+      // 1. Explicitly look for "D" code with Exhibition (D56 : Exhibition)
+      const dCodeMatch = cleanText.match(/\b(D\d{2})\s?[:;]?\s?E/i);
+
+      // 2. "Ship To: ... ID33 ..."
+      const shipToMatch = cleanText.match(/Ship\s?To[\s\S]{0,30}?\b((?:ID|D)\d{2,5})\b/i);
+      
+      // 3. Fallback: "D56 :" (Start of line or distinct code)
+      const codeMatch = cleanText.match(/(?:^|\s)((?:ID|D)\d{2,5})\s?[:;]/im);
+
+      if (dCodeMatch) {
+         to = dCodeMatch[1]; // Priority 1: D56 + Exhibition pattern
+      } else if (shipToMatch) {
+         to = shipToMatch[1];
+      } else if (codeMatch) {
+         to = codeMatch[1];
+      }
+
+      // Fix OCR mistakes on Result (Just in case regex missed it)
+      if (to) {
+        // Force ID prefix if it looks like ID but starts with 1D/lD/|D
+        to = to.replace(/^1D/i, 'ID').replace(/^lD/i, 'ID').replace(/^\|D/i, 'ID');
+        
+        // Remove common misreads explicitly
+        const invalidWords = ['RTSH', 'PDO', 'RS', 'VP', 'THBNA1', 'BKK1'];
+        if (invalidWords.includes(to.toUpperCase())) {
+           const retryMatch = cleanText.match(/\b(D\d{2})\b/);
+           if (retryMatch) to = retryMatch[1];
+           else to = ""; 
+        }
+
+        // --- NEW: Fix single "D" -> "ID" ---
+        // If it starts with 'D' and followed by 2 digits (D33), change to ID33?
+        // Wait, user said "if single D, add ID". 
+        // Example: "D33" -> "ID33"? Or "D" -> "ID"?
+        // Usually D56 stays D56. But maybe D33 should be ID33?
+        // Let's assume if it matches D33 (which is ID33 usually), we convert.
+        // But D56 is Exhibition. ID33 is Warehouse.
+        // Let's look at the length. ID codes are usually ID + 2 digits. D codes are D + 2 digits.
+        // User request: "ถ้ามี D ตัวเกียวให้เพิ่มเปน ID" -> "If single D, make it ID".
+        // Maybe he means OCR read "D" instead of "ID"?
+        // Example: "D33" should be "ID33". 
+        // Let's apply this logic: If it is D + digits, and NOT D56 (which is valid), convert to ID?
+        // Or maybe just blind convert D -> ID for specific numbers?
+        
+        // Let's try: If it starts with D and is NOT D56, convert to ID.
+        if (to.startsWith('D') && to !== 'D56') {
+            to = to.replace('D', 'ID');
+        }
+      }
+      
+      // PHYID Fixes
+      if (phyid) {
+          if (phyid.includes('1D') && !phyid.includes('ID')) phyid = phyid.replace('PHY1D', 'PHYID');
+          // Sometimes it captures leading symbols like "-PHYID", clean it
+          phyid = phyid.replace(/^[-|/]/, '');
+      }
+
+      if (phyid || to) {
+        return { phyid: phyid || "?", to: to || "?", qty };
+      }
+      
+      return null;
+    }
+
+  </script>
+</body>
+</html>

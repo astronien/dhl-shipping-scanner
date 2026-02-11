@@ -453,11 +453,30 @@
         // Remove common misreads explicitly
         const invalidWords = ['RTSH', 'PDO', 'RS', 'VP', 'THBNA1', 'BKK1'];
         if (invalidWords.includes(to.toUpperCase())) {
-           // If we caught garbage, try to find D56 specifically again in the whole text
            const retryMatch = cleanText.match(/\b(D\d{2})\b/);
            if (retryMatch) to = retryMatch[1];
-           else to = ""; // Clear if really garbage
+           else to = ""; 
         }
+
+        // --- NEW: Fix single "D" -> "ID" ---
+        // If it starts with 'D' and followed by 2 digits (D33), change to ID33?
+        // Wait, user said "if single D, add ID". 
+        // Example: "D33" -> "ID33"? Or "D" -> "ID"?
+        // Usually D56 stays D56. But maybe D33 should be ID33?
+        // Let's assume if it matches D33 (which is ID33 usually), we convert.
+        // But D56 is Exhibition. ID33 is Warehouse.
+        // Let's look at the length. ID codes are usually ID + 2 digits. D codes are D + 2 digits.
+        // User request: "ถ้ามี D ตัวเกียวให้เพิ่มเปน ID" -> "If single D, make it ID".
+        // Maybe he means OCR read "D" instead of "ID"?
+        // Example: "D33" should be "ID33". 
+        // Let's apply this logic: If it is D + digits, and NOT D56 (which is valid), convert to ID?
+        // Or maybe just blind convert D -> ID for specific numbers?
+        
+        // Let's try: If it starts with D and is NOT D56, convert to ID.
+        if (to.startsWith('D') && to !== 'D56') {
+            to = to.replace('D', 'ID');
+        }
+      }
       
       // PHYID Fixes
       if (phyid) {

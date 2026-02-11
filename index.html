@@ -304,12 +304,14 @@
       const refMatch = text.match(/Ref\s?ID[:\s]*([A-Z0-9-]+)/i);
 
       if (phyidMatch) {
-        phyid = phyidMatch[1];
+        phyid = "PHYID" + phyidMatch[1]; // Add prefix back
       } else if (smartMatch) {
-        phyid = smartMatch[1]; // Use the middle part for SMART labels
+        phyid = "SMART-" + smartMatch[1]; // Add prefix back
       } else if (refMatch) {
         // Cleaning up generic ref id
-        phyid = refMatch[1].replace('SMART-', '').split('-')[0]; 
+        let val = refMatch[1].replace('SMART-', '').split('-')[0]; 
+        if (/^\d+$/.test(val)) val = "PHYID" + val; // Guess it's PHYID
+        phyid = val;
       }
 
 

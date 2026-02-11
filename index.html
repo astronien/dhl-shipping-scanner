@@ -133,9 +133,12 @@
     <!-- Actions -->
     <div class="flex justify-end gap-2 mb-8">
       <button onclick="showHistory()" class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 shadow mr-auto">📜 ประวัติ</button>
-      <button onclick="clearTable()" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 shadow">🗑️ ล้างทั้งหมด</button>
-      <button onclick="exportToPDF()" class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 font-bold shadow">📄 Export PDF</button>
-      <button onclick="window.print()" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 font-bold shadow">🖨️ พิมพ์เอกสาร</button>
+      
+      <button onclick="saveToHistory()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 shadow font-bold">💾 บันทึก</button>
+      <button onclick="clearTable()" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 shadow">🗑️ ล้าง</button>
+      
+      <button onclick="exportToPDF()" class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 font-bold shadow">📄 PDF</button>
+      <button onclick="window.print()" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 font-bold shadow">🖨️ พิมพ์</button>
     </div>
 
     <!-- Confirm Modal -->
@@ -170,11 +173,11 @@
 
 
     <!-- History Modal -->
-    <div id="history-modal" class="fixed inset-0 bg-black/50 hidden flex items-center justify-center z-50 p-4">
-      <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6 h-[80vh] flex flex-col">
+    <div id="history-modal" class="fixed inset-0 bg-black/50 hidden flex items-center justify-center z-[100] p-4">
+      <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6 h-[80vh] flex flex-col relative z-[101]">
         <div class="flex justify-between items-center mb-4">
           <h3 class="text-xl font-bold">📜 ประวัติการส่งสินค้า</h3>
-          <button onclick="closeHistory()" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+          <button onclick="closeHistory()" class="text-gray-500 hover:text-gray-800 text-3xl font-bold p-2">&times;</button>
         </div>
         
         <div id="history-list" class="flex-1 overflow-y-auto space-y-3 p-2 bg-gray-50 rounded border">
@@ -183,7 +186,7 @@
         </div>
 
         <div class="mt-4 pt-2 border-t flex justify-end">
-          <button onclick="closeHistory()" class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">ปิด</button>
+          <button onclick="closeHistory()" class="px-6 py-2 bg-gray-200 rounded hover:bg-gray-300 font-bold text-gray-700">ปิดหน้าต่าง</button>
         </div>
       </div>
     </div>
@@ -369,30 +372,24 @@
     }
 
     function clearTable() {
-      // Check if there is data
-      const hasData = rowData.some(r => r.phyid || r.to);
-      
-      if (hasData) {
-        if (confirm('ต้องการบันทึกข้อมูลลงประวัติก่อนล้างหรือไม่? (แนะนำ)')) {
-          saveToHistory();
-        } else {
-           if(!confirm('ยืนยันล้างข้อมูลโดยไม่บันทึก?')) return;
-        }
+      if(confirm('ยืนยันล้างข้อมูลทั้งหมด?')) {
+        rowData = Array(MAX_ROWS).fill({ phyid: "", to: "", qty: "" });
+        for(let i=0; i<MAX_ROWS; i++) rowData[i] = { phyid: "", to: "", qty: "" };
+        currentRowIndex = 0;
+        renderTable();
+        document.getElementById('scan-result').classList.add('hidden');
       }
-
-      rowData = Array(MAX_ROWS).fill({ phyid: "", to: "", qty: "" });
-      for(let i=0; i<MAX_ROWS; i++) rowData[i] = { phyid: "", to: "", qty: "" };
-      currentRowIndex = 0;
-      renderTable();
-      document.getElementById('scan-result').classList.add('hidden');
     }
 
     // --- Cloud History Logic (Google Sheets) ---
     const API_URL = "https://script.google.com/macros/s/AKfycbyRCzQMaoYgXH5yMHvPd2aOnHJlxdQ_GPI5M4BSP1I6pVXYmDcX283s1p08V9gTJ81Z/exec";
 
-    async function saveToHistory() {
+    function saveToHistory() {
       const activeItems = rowData.filter(r => r.phyid || r.to);
-      if (activeItems.length === 0) return;
+      if (activeItems.length === 0) {
+          alert('⚠️ ไม่มีข้อมูลให้บันทึก');
+          return;
+      }
 
       const historyItem = {
         id: Date.now(),
@@ -407,18 +404,26 @@
       localStorage.setItem('dhl_history', JSON.stringify(localHistory));
 
       // Save to Cloud
-      try {
-        await fetch(API_URL, {
+      // Show loading indicator
+      const saveBtn = document.querySelector('button[onclick="saveToHistory()"]');
+      const originalText = saveBtn.innerText;
+      saveBtn.innerText = "⏳ กำลังบันทึก...";
+      saveBtn.disabled = true;
+
+      fetch(API_URL, {
           method: 'POST',
-          mode: 'no-cors', // Important for Google Apps Script
+          mode: 'no-cors',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(historyItem)
-        });
-        alert('✅ บันทึกออนไลน์เรียบร้อย!');
-      } catch (err) {
-        console.error(err);
-        alert('⚠️ บันทึกออนไลน์ไม่สำเร็จ (แต่บันทึกลงเครื่องแล้ว)');
-      }
+      }).then(() => {
+          alert('✅ บันทึกเรียบร้อย!');
+      }).catch(err => {
+          console.error(err);
+          alert('⚠️ บันทึกออนไลน์ไม่สำเร็จ (แต่บันทึกลงเครื่องแล้ว)');
+      }).finally(() => {
+          saveBtn.innerText = originalText;
+          saveBtn.disabled = false;
+      });
     }
 
     async function showHistory() {

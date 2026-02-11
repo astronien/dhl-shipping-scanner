@@ -428,14 +428,18 @@
 
 
       // --- To Patterns ---
-      // 1. "Ship To: ... D56 ..." (Find ID/D code after Ship To, ignoring garbage like 'Rs')
-      // Looks for "Ship To" then scans ahead for Dxx or IDxxxx
+      // 1. Explicitly look for "D" code with Exhibition (D56 : Exhibition)
+      const dCodeMatch = cleanText.match(/\b(D\d{2})\s?[:;]?\s?E/i);
+
+      // 2. "Ship To: ... ID33 ..."
       const shipToMatch = cleanText.match(/Ship\s?To[\s\S]{0,30}?\b((?:ID|D)\d{2,5})\b/i);
       
-      // 2. Fallback: "D56 :" (Start of line or distinct code)
+      // 3. Fallback: "D56 :" (Start of line or distinct code)
       const codeMatch = cleanText.match(/(?:^|\s)((?:ID|D)\d{2,5})\s?[:;]/im);
 
-      if (shipToMatch) {
+      if (dCodeMatch) {
+         to = dCodeMatch[1]; // Priority 1: D56 + Exhibition pattern
+      } else if (shipToMatch) {
          to = shipToMatch[1];
       } else if (codeMatch) {
          to = codeMatch[1];
@@ -446,12 +450,14 @@
         // Force ID prefix if it looks like ID but starts with 1D/lD/|D
         to = to.replace(/^1D/i, 'ID').replace(/^lD/i, 'ID').replace(/^\|D/i, 'ID');
         
-        // Remove common misreads
-        if (to.toUpperCase() === 'RTSH' || to.toUpperCase() === 'PDO') to = ""; 
-        
-        // If it's just numbers like "33", assume "ID33" if not D code
-        if (/^\d{2,}$/.test(to)) to = "ID" + to;
-      }
+        // Remove common misreads explicitly
+        const invalidWords = ['RTSH', 'PDO', 'RS', 'VP', 'THBNA1', 'BKK1'];
+        if (invalidWords.includes(to.toUpperCase())) {
+           // If we caught garbage, try to find D56 specifically again in the whole text
+           const retryMatch = cleanText.match(/\b(D\d{2})\b/);
+           if (retryMatch) to = retryMatch[1];
+           else to = ""; // Clear if really garbage
+        }
       
       // PHYID Fixes
       if (phyid) {

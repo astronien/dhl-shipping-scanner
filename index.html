@@ -95,9 +95,11 @@
 
       </div>
       
-      <!-- Scan Result Preview (Optional) -->
-      <div id="scan-result" class="mt-4 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800 hidden">
-        <b>ผลการสแกนล่าสุด:</b> <span id="scan-text">-</span>
+      <!-- Scan Result Preview -->
+      <div id="scan-result" class="mt-4 p-4 rounded text-sm hidden">
+        <div id="scan-status" class="font-bold mb-2"></div>
+        <div id="scan-details" class="text-xs text-gray-500 bg-gray-100 p-2 rounded mt-2 hidden whitespace-pre-wrap font-mono border"></div>
+        <button onclick="toggleDetails()" class="text-xs text-blue-500 underline mt-2">ดูข้อความที่อ่านได้ (Debug)</button>
       </div>
     </div>
 
@@ -235,16 +237,22 @@
     }
 
     // --- OCR Logic ---
+    function toggleDetails() {
+      document.getElementById('scan-details').classList.toggle('hidden');
+    }
+
     async function handleImageUpload(event) {
       const file = event.target.files[0];
       if (!file) return;
 
       const loading = document.getElementById('loading-overlay');
       const resultBox = document.getElementById('scan-result');
-      const resultText = document.getElementById('scan-text');
+      const statusText = document.getElementById('scan-status');
+      const detailsText = document.getElementById('scan-details');
 
       loading.classList.remove('hidden');
       loading.classList.add('flex');
+      resultBox.classList.add('hidden'); // Hide until finished
 
       try {
         const worker = await Tesseract.createWorker('eng'); // English is usually enough for codes
@@ -252,72 +260,71 @@
         const text = ret.data.text;
         
         console.log("OCR Result:", text);
+        detailsText.innerText = "ข้อความดิบที่อ่านได้:\n" + text;
+        
         await worker.terminate();
 
         // Parse Logic
         const parsed = parseDHLText(text);
         
+        resultBox.classList.remove('hidden');
         if (parsed) {
           addEntry(parsed.phyid, parsed.to, parsed.qty);
-          resultText.innerText = `✅ เพิ่ม: ${parsed.phyid} -> ${parsed.to} (${parsed.qty})`;
-          resultBox.classList.remove('hidden', 'bg-red-50', 'text-red-800', 'border-red-200');
-          resultBox.classList.add('bg-green-50', 'text-green-800', 'border-green-200');
+          statusText.innerHTML = `✅ เพิ่มรายการสำเร็จ:<br>PHYID: ${parsed.phyid}<br>To: ${parsed.to} (${parsed.qty} กล่อง)`;
+          resultBox.className = "mt-4 p-4 rounded bg-green-50 border border-green-200 text-green-800";
         } else {
-          resultText.innerText = "❌ อ่านข้อมูลไม่พบ ลองถ่ายใหม่ให้ชัดเจนขึ้นครับ";
-          resultBox.classList.remove('hidden', 'bg-green-50', 'text-green-800', 'border-green-200');
-          resultBox.classList.add('bg-red-50', 'text-red-800', 'border-red-200');
+          statusText.innerHTML = "❌ อ่านข้อมูลไม่พบ!<br>ลองถ่ายให้ชัดเจน หรือกรอกเองด้านบนครับ";
+          resultBox.className = "mt-4 p-4 rounded bg-red-50 border border-red-200 text-red-800";
         }
 
       } catch (err) {
         console.error(err);
-        alert('เกิดข้อผิดพลาดในการอ่านรูปภาพ: ' + err.message);
+        alert('เกิดข้อผิดพลาด: ' + err.message);
       } finally {
         loading.classList.add('hidden');
         loading.classList.remove('flex');
-        // Reset file input so same file can be selected again
         document.getElementById('file-input').value = '';
       }
     }
 
     function parseDHLText(text) {
       // Clean text
-      const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+      const cleanText = text.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' '); // Single line for easier matching
       
       let phyid = "";
       let to = "";
       let qty = "1";
 
-      // Regex Patterns based on DHL label
-      // 1. Find PHYID (Ref ID: PHYID21074-645-1)
-      // Look for "PHYID" followed by numbers
-      const phyidMatch = text.match(/PHYID\s?(\d+)/i);
-      if (phyidMatch) {
-        phyid = phyidMatch[1];
-      }
+      // --- PHYID Patterns ---
+      // 1. "PHYIDxxxxx" or "PHYID xxxxx"
+      const phyidMatch = text.match(/PHYID\s?(\d{4,})/i); 
+      // 2. Fallback: Look for "Ref ID" followed by numbers
+      const refMatch = text.match(/Ref\s?ID[:\s]*(\d{5,})/i);
+      // 3. Just look for a 5 digit number starting with 2 (risky but works for 21074)
+      const numMatch = text.match(/\b(2\d{4})\b/);
 
-      // 2. Find "To" (D56 : Exhibition...)
-      // Look for a code like D56, S12, etc. usually at start of line or after "Ship To:"
-      // Pattern: Letter + Number(s) + " : "
-      const toMatch = text.match(/([A-Z]\d{2,3})\s?[:;]\s?/);
-      if (toMatch) {
-        to = toMatch[1];
-      } else {
-        // Fallback: Look for "Ship To:" and take the next line's code
-        const shipToIndex = lines.findIndex(l => l.toLowerCase().includes('ship to'));
-        if (shipToIndex !== -1 && lines[shipToIndex + 1]) {
-           const nextLine = lines[shipToIndex + 1];
-           const codeMatch = nextLine.match(/^([A-Z]\d{2,3})/);
-           if (codeMatch) to = codeMatch[1];
-        }
-      }
+      if (phyidMatch) phyid = phyidMatch[1];
+      else if (refMatch) phyid = refMatch[1];
+      else if (numMatch) phyid = numMatch[1];
 
-      // 3. Find Quantity (1/1)
-      // Usually near the bottom
-      const qtyMatch = text.match(/(\d+)\s?[\/\\]\s?(\d+)/);
+
+      // --- To Patterns ---
+      // 1. Look for "Ship To:" followed by code
+      const shipToMatch = text.match(/Ship\s?To[:\s]*([A-Z]\d{2,3})/i);
+      // 2. Look for explicit code pattern like "D56 :" or "S12 :"
+      const codeMatch = text.match(/\b([A-Z]\d{2,3})\s?[:;]\s?E/i); // "D56 : E" (Exhibition...)
+      // 3. Fallback: Any uppercase letter + 2 digits (D56, S99)
+      const genericCodeMatch = text.match(/\b([A-Z]\d{2})\b/);
+
+      if (shipToMatch) to = shipToMatch[1];
+      else if (codeMatch) to = codeMatch[1];
+      else if (genericCodeMatch) to = genericCodeMatch[1];
+
+
+      // --- Quantity Patterns ---
+      const qtyMatch = text.match(/(\d+)\s?[\/\\]\s?(\d+)/); // 1/1, 1\1
       if (qtyMatch) {
-        // Usually taking the first number or second? Let's take the first one (Package X of Y)
-        // Or just default to 1 as requested mostly "1 box"
-        // qty = qtyMatch[1]; 
+         // Maybe use total boxes? Or current box? Let's stick to default 1 unless explicit
       }
 
       if (phyid) {

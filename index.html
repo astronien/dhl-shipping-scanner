@@ -18,8 +18,33 @@
       .print-only { display: block !important; }
       /* A4 size for printing */
       @page {
-        size: A4;
+        size: A4 portrait;
         margin: 1cm;
+      }
+      .print-container {
+        width: 100% !important;
+        max-width: 210mm !important;
+        height: auto;
+        min-height: 297mm;
+        padding: 20px;
+        box-shadow: none !important;
+        margin: 0 auto;
+        border: none;
+      }
+      .form-table {
+        font-size: 14pt;
+        width: 100%;
+        margin-top: 15px;
+      }
+      .form-table th, .form-table td {
+        padding: 8px;
+        height: 35px;
+      }
+      .form-table input {
+        font-size: 14pt;
+      }
+      .footer-note, .signatures {
+        margin-top: 30px;
       }
     }
     .print-only { display: none; }

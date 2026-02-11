@@ -295,23 +295,19 @@
       let to = "";
       let qty = "1";
 
-      // --- PHYID Patterns ---
-      // 1. Standard: "PHYIDxxxxx"
-      const phyidMatch = text.match(/PHYID\s?(\d{4,})/i); 
-      // 2. SMART Ref: "SMART-C1C79284-S-1" -> Take "C1C79284"
-      const smartMatch = text.match(/SMART-([A-Z0-9]+)-/i);
-      // 3. Fallback Ref ID: "Ref ID: xxxxx"
-      const refMatch = text.match(/Ref\s?ID[:\s]*([A-Z0-9-]+)/i);
-
-      if (phyidMatch) {
-        phyid = "PHYID" + phyidMatch[1]; // Add prefix back
-      } else if (smartMatch) {
-        phyid = "SMART-" + smartMatch[1]; // Add prefix back
-      } else if (refMatch) {
-        // Cleaning up generic ref id
-        let val = refMatch[1].replace('SMART-', '').split('-')[0]; 
-        if (/^\d+$/.test(val)) val = "PHYID" + val; // Guess it's PHYID
-        phyid = val;
+      // --- PHYID Patterns (Take everything) ---
+      // 1. "Ref ID: SMART-C1C79284-S-1" -> "SMART-C1C79284-S-1"
+      const refLineMatch = text.match(/Ref\s?ID[:\s]*([^\n]+)/i);
+      
+      if (refLineMatch) {
+        phyid = refLineMatch[1].trim(); // Take the whole Ref ID
+      } else {
+        // Fallbacks if "Ref ID:" is not found/read clearly
+        const phyidMatch = text.match(/PHYID\s?([^\s]+)/i); 
+        const smartMatch = text.match(/SMART-([^\s]+)/i);
+        
+        if (phyidMatch) phyid = "PHYID" + phyidMatch[1];
+        else if (smartMatch) phyid = "SMART-" + smartMatch[1];
       }
 
 

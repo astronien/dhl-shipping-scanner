@@ -289,46 +289,56 @@
 
     function parseDHLText(text) {
       // Clean text
-      const cleanText = text.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' '); // Single line for easier matching
+      const cleanText = text.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' '); 
       
       let phyid = "";
       let to = "";
       let qty = "1";
 
       // --- PHYID Patterns ---
-      // 1. "PHYIDxxxxx" or "PHYID xxxxx"
+      // 1. Standard: "PHYIDxxxxx"
       const phyidMatch = text.match(/PHYID\s?(\d{4,})/i); 
-      // 2. Fallback: Look for "Ref ID" followed by numbers
-      const refMatch = text.match(/Ref\s?ID[:\s]*(\d{5,})/i);
-      // 3. Just look for a 5 digit number starting with 2 (risky but works for 21074)
-      const numMatch = text.match(/\b(2\d{4})\b/);
+      // 2. SMART Ref: "SMART-C1C79284-S-1" -> Take "C1C79284"
+      const smartMatch = text.match(/SMART-([A-Z0-9]+)-/i);
+      // 3. Fallback Ref ID: "Ref ID: xxxxx"
+      const refMatch = text.match(/Ref\s?ID[:\s]*([A-Z0-9-]+)/i);
 
-      if (phyidMatch) phyid = phyidMatch[1];
-      else if (refMatch) phyid = refMatch[1];
-      else if (numMatch) phyid = numMatch[1];
+      if (phyidMatch) {
+        phyid = phyidMatch[1];
+      } else if (smartMatch) {
+        phyid = smartMatch[1]; // Use the middle part for SMART labels
+      } else if (refMatch) {
+        // Cleaning up generic ref id
+        phyid = refMatch[1].replace('SMART-', '').split('-')[0]; 
+      }
 
 
       // --- To Patterns ---
-      // 1. Look for "Ship To:" followed by code
-      const shipToMatch = text.match(/Ship\s?To[:\s]*([A-Z]\d{2,3})/i);
-      // 2. Look for explicit code pattern like "D56 :" or "S12 :"
-      const codeMatch = text.match(/\b([A-Z]\d{2,3})\s?[:;]\s?E/i); // "D56 : E" (Exhibition...)
-      // 3. Fallback: Any uppercase letter + 2 digits (D56, S99)
-      const genericCodeMatch = text.match(/\b([A-Z]\d{2})\b/);
+      // 1. "Ship To: ID33" -> ID33
+      // Look for "Ship To:" followed by code (Letter + Digits)
+      // Allow for thai characters afterwards
+      const shipToMatch = text.match(/Ship\s?To[:\s]*([A-Z0-9]{2,5})/i);
+      
+      // 2. Explicit code pattern like "D56 :" or "S12 :"
+      const codeMatch = text.match(/\b([A-Z]\d{2,3})\s?[:;]\s?/i); 
+      
+      // 3. Special case for "ID33" which might appear as "1D33" in bad OCR
+      const id33Match = text.match(/\b(ID\d{2})\b/i);
 
       if (shipToMatch) to = shipToMatch[1];
+      else if (id33Match) to = id33Match[1];
       else if (codeMatch) to = codeMatch[1];
-      else if (genericCodeMatch) to = genericCodeMatch[1];
+
+      // Fix OCR mistakes: 1D33 -> ID33
+      if (to && to.startsWith('1D')) to = to.replace('1D', 'ID');
 
 
-      // --- Quantity Patterns ---
-      const qtyMatch = text.match(/(\d+)\s?[\/\\]\s?(\d+)/); // 1/1, 1\1
-      if (qtyMatch) {
-         // Maybe use total boxes? Or current box? Let's stick to default 1 unless explicit
-      }
+      // --- Quantity ---
+      // Default to 1
 
-      if (phyid) {
-        return { phyid, to: to || "?", qty };
+      if (phyid || to) {
+        // If we found at least one, return result (even if partial)
+        return { phyid: phyid || "?", to: to || "?", qty };
       }
       
       return null;

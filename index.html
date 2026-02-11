@@ -344,12 +344,14 @@
     }
 
     function parseDHLText(text) {
-      // Common OCR Fixes (1 vs I)
-      // Fix keywords before matching
+      // Common OCR Fixes (1 vs I, 0 vs O, etc.)
       let cleanText = text
         .replace(/PHY1D/gi, 'PHYID')
         .replace(/Ref\s?1D/gi, 'Ref ID')
-        .replace(/\b1D(\d{2})/g, 'ID$1'); // Fix 1D33 -> ID33
+        .replace(/\b1D(\d{2,})/g, 'ID$1') // Fix 1D1807 -> ID1807
+        .replace(/\b1D(\d{2})/g, 'ID$1')  // Fix 1D33 -> ID33
+        .replace(/lD(\d+)/g, 'ID$1')      // Fix lD33 -> ID33
+        .replace(/\|D(\d+)/g, 'ID$1');    // Fix |D33 -> ID33
 
       let phyid = "";
       let to = "";
@@ -360,17 +362,15 @@
       const refMatch = cleanText.match(/Ref\s?ID[:\s]*([^\n\r]+)/i);
       
       if (refMatch) {
-        // Cleanup the captured ID (remove surrounding spaces)
         let rawId = refMatch[1].trim();
-        // Sometimes OCR captures trailing garbage, maybe take first "word" if it looks like an ID
-        // But SMART IDs can be long. Let's assume the line ends with the ID or ID is the main part.
-        // Let's just take the first continuous block of characters if it contains numbers
         const parts = rawId.split(/\s+/);
         if (parts.length > 0) phyid = parts[0]; 
       } 
       
       // Fallback: Look specifically for PHYID or SMART if Ref ID line missed
       if (!phyid) {
+        // Fix: PHY1D -> PHYID explicitly before fallback
+        cleanText = cleanText.replace(/PHY1D/gi, 'PHYID');
         const phyidMatch = cleanText.match(/(PHYID[\w-]+)/i);
         const smartMatch = cleanText.match(/(SMART-[\w-]+)/i);
         
@@ -380,21 +380,26 @@
 
 
       // --- To Patterns ---
-      // 1. "Ship To: ID33"
-      const shipToMatch = cleanText.match(/Ship\s?To[:\s]*([A-Z0-9]{2,5})/i);
+      // 1. "Ship To: 1D1807" -> ID1807
+      // Look for "Ship To:" followed by code (IDxxxx or Dxx)
+      const shipToMatch = cleanText.match(/Ship\s?To[:\s]*([A-Z0-9]{2,8})/i);
       
       // 2. "ID33 :" or "D56 :" (Code followed by colon)
-      const codeMatch = cleanText.match(/\b([A-Z][A-Z0-9]{1,3})\s?[:;]/i);
+      const codeMatch = cleanText.match(/\b([A-Z][A-Z0-9]{1,4})\s?[:;]/i);
 
       if (shipToMatch) to = shipToMatch[1];
       else if (codeMatch) to = codeMatch[1];
 
       // Fix OCR mistakes on Result (Just in case regex missed it)
       if (to && to.startsWith('1D')) to = to.replace('1D', 'ID');
-      if (phyid && phyid.includes('1D') && !phyid.includes('ID')) {
-          // Be careful not to replace actual 1s in the ID numbers
-          // Only replace if it looks like "PHY1D"
-          phyid = phyid.replace('PHY1D', 'PHYID');
+      if (to && to.startsWith('lD')) to = to.replace('lD', 'ID');
+      if (to && to.startsWith('|D')) to = to.replace('|D', 'ID');
+      
+      // PHYID Fixes
+      if (phyid) {
+          if (phyid.includes('1D') && !phyid.includes('ID')) phyid = phyid.replace('PHY1D', 'PHYID');
+          // Sometimes it captures leading symbols like "-PHYID", clean it
+          phyid = phyid.replace(/^[-|/]/, '');
       }
 
       if (phyid || to) {

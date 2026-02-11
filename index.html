@@ -259,7 +259,6 @@
       for (let i = 0; i < MAX_ROWS; i++) {
         const item = rowData[i];
         
-        // Sum up quantity (safely)
         if (item.qty && !isNaN(item.qty) && item.qty !== "") {
             totalQty += parseInt(item.qty);
         }
@@ -274,9 +273,33 @@
         tbody.appendChild(row);
       }
       
-      // Update Total
-      const totalEl = document.getElementById('total-qty');
-      if (totalEl) totalEl.innerText = totalQty;
+      // Add Total Row Manually inside tbody (Guaranteed to show)
+      const totalRow = document.createElement('tr');
+      totalRow.innerHTML = `
+        <td colspan="3" style="text-align: right; font-weight: bold; padding-right: 10px; background-color: #f0f0f0; border: 1px solid black;">รวมจำนวนกล่องทั้งหมด:</td>
+        <td id="total-qty-cell" style="font-weight: bold; background-color: #f0f0f0; text-align: center; border: 1px solid black; font-size: 14pt;">${totalQty}</td>
+      `;
+      tbody.appendChild(totalRow);
+    }
+
+    function updateRow(index, field, value) {
+      rowData[index][field] = value;
+      
+      // Recalculate total immediately
+      if (field === 'qty') {
+          let totalQty = 0;
+          for (let i = 0; i < MAX_ROWS; i++) {
+            const q = rowData[i].qty;
+            if (q && !isNaN(q) && q !== "") totalQty += parseInt(q);
+          }
+          const totalEl = document.getElementById('total-qty-cell');
+          if (totalEl) totalEl.innerText = totalQty;
+      }
+
+      // Auto advance
+      if (rowData[index].phyid && rowData[index].to) {
+        currentRowIndex = Math.max(currentRowIndex, index + 1);
+      }
     }
 
     function updateRow(index, field, value) {

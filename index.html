@@ -132,7 +132,8 @@
 
     <!-- Actions -->
     <div class="flex justify-end gap-2 mb-8">
-      <button onclick="clearTable()" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">🗑️ ล้างทั้งหมด</button>
+      <button onclick="showHistory()" class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 shadow mr-auto">📜 ประวัติ</button>
+      <button onclick="clearTable()" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 shadow">🗑️ ล้างทั้งหมด</button>
       <button onclick="exportToPDF()" class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 font-bold shadow">📄 Export PDF</button>
       <button onclick="window.print()" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 font-bold shadow">🖨️ พิมพ์เอกสาร</button>
     </div>
@@ -167,6 +168,25 @@
 
   </div>
 
+
+    <!-- History Modal -->
+    <div id="history-modal" class="fixed inset-0 bg-black/50 hidden flex items-center justify-center z-50 p-4">
+      <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6 h-[80vh] flex flex-col">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-xl font-bold">📜 ประวัติการส่งสินค้า</h3>
+          <button onclick="closeHistory()" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+        </div>
+        
+        <div id="history-list" class="flex-1 overflow-y-auto space-y-3 p-2 bg-gray-50 rounded border">
+          <!-- History items generated here -->
+          <p class="text-center text-gray-400 mt-10">ยังไม่มีประวัติ</p>
+        </div>
+
+        <div class="mt-4 pt-2 border-t flex justify-end">
+          <button onclick="closeHistory()" class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">ปิด</button>
+        </div>
+      </div>
+    </div>
 
     <div class="print-container bg-white max-w-[210mm] mx-auto p-[20px] shadow-lg mb-8" id="print-area">
       
@@ -349,13 +369,114 @@
     }
 
     function clearTable() {
-      if(confirm('ล้างข้อมูลทั้งหมด?')) {
-        rowData = Array(MAX_ROWS).fill({ phyid: "", to: "", qty: "" }); // Reset reference properly
-        // Fix: fill with new objects
+      // Check if there is data
+      const hasData = rowData.some(r => r.phyid || r.to);
+      
+      if (hasData) {
+        if (confirm('ต้องการบันทึกข้อมูลลงประวัติก่อนล้างหรือไม่? (แนะนำ)')) {
+          saveToHistory();
+        } else {
+           if(!confirm('ยืนยันล้างข้อมูลโดยไม่บันทึก?')) return;
+        }
+      }
+
+      rowData = Array(MAX_ROWS).fill({ phyid: "", to: "", qty: "" });
+      for(let i=0; i<MAX_ROWS; i++) rowData[i] = { phyid: "", to: "", qty: "" };
+      currentRowIndex = 0;
+      renderTable();
+      document.getElementById('scan-result').classList.add('hidden');
+    }
+
+    // --- History Logic ---
+    function saveToHistory() {
+      const activeItems = rowData.filter(r => r.phyid || r.to);
+      if (activeItems.length === 0) return;
+
+      const historyItem = {
+        id: Date.now(),
+        timestamp: new Date().toLocaleString('th-TH'),
+        items: activeItems,
+        totalQty: document.getElementById('total-qty').innerText
+      };
+
+      const history = JSON.parse(localStorage.getItem('dhl_history') || '[]');
+      history.unshift(historyItem); // Add to top
+      localStorage.setItem('dhl_history', JSON.stringify(history));
+      
+      alert('✅ บันทึกประวัติเรียบร้อย');
+    }
+
+    function showHistory() {
+      const modal = document.getElementById('history-modal');
+      const list = document.getElementById('history-list');
+      const history = JSON.parse(localStorage.getItem('dhl_history') || '[]');
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex'); // Ensure flex behavior for centering
+
+      if (history.length === 0) {
+        list.innerHTML = '<p class="text-center text-gray-400 mt-10">ยังไม่มีประวัติ</p>';
+        return;
+      }
+
+      list.innerHTML = history.map(h => `
+        <div class="bg-white p-3 rounded shadow-sm border border-gray-200">
+          <div class="flex justify-between items-center mb-2">
+            <div>
+              <span class="font-bold text-blue-600">${h.timestamp}</span>
+              <span class="text-sm text-gray-500 ml-2">(${h.items.length} รายการ, ${h.totalQty || 0} กล่อง)</span>
+            </div>
+            <div class="space-x-1">
+              <button onclick="loadHistoryItem(${h.id})" class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200">📥 โหลด</button>
+              <button onclick="deleteHistoryItem(${h.id})" class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200">🗑️ ลบ</button>
+            </div>
+          </div>
+          <div class="text-xs text-gray-600 overflow-x-auto">
+            <table class="w-full">
+              ${h.items.map(item => `
+                <tr class="border-b border-gray-100">
+                  <td class="py-1 pr-2">${item.phyid}</td>
+                  <td class="py-1 pr-2">-> ${item.to}</td>
+                  <td class="py-1 text-right">x${item.qty}</td>
+                </tr>
+              `).join('')}
+            </table>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function closeHistory() {
+      document.getElementById('history-modal').classList.add('hidden');
+    }
+
+    function deleteHistoryItem(id) {
+      if(!confirm('ยืนยันลบประวัตินี้?')) return;
+      let history = JSON.parse(localStorage.getItem('dhl_history') || '[]');
+      history = history.filter(h => h.id !== id);
+      localStorage.setItem('dhl_history', JSON.stringify(history));
+      showHistory(); // Refresh list
+    }
+
+    function loadHistoryItem(id) {
+      if(!confirm('ต้องการโหลดข้อมูลนี้มาแทนที่ข้อมูลปัจจุบัน?')) return;
+      const history = JSON.parse(localStorage.getItem('dhl_history') || '[]');
+      const item = history.find(h => h.id === id);
+      if (item) {
+        // Clear current
+        rowData = Array(MAX_ROWS).fill({ phyid: "", to: "", qty: "" }); 
         for(let i=0; i<MAX_ROWS; i++) rowData[i] = { phyid: "", to: "", qty: "" };
-        currentRowIndex = 0;
+        
+        // Load data
+        item.items.forEach((data, index) => {
+          if (index < MAX_ROWS) {
+            rowData[index] = data;
+          }
+        });
+        
+        currentRowIndex = item.items.length;
         renderTable();
-        document.getElementById('scan-result').classList.add('hidden');
+        closeHistory();
       }
     }
 

@@ -253,6 +253,7 @@
     // --- Table Logic ---
     function renderTable() {
       const tbody = document.getElementById('table-body');
+      const totalEl = document.getElementById('total-qty'); // Get element directly
       tbody.innerHTML = '';
       let totalQty = 0;
 
@@ -274,8 +275,12 @@
         tbody.appendChild(row);
       }
       
-      // Update Total
-      document.getElementById('total-qty').innerText = totalQty;
+      // Update Total - Ensure element exists before setting
+      if (totalEl) {
+          totalEl.innerText = totalQty;
+      } else {
+          console.error("Total element not found!");
+      }
     }
 
     function updateRow(index, field, value) {
@@ -288,13 +293,32 @@
             const q = rowData[i].qty;
             if (q && !isNaN(q)) totalQty += parseInt(q);
           }
-          document.getElementById('total-qty').innerText = totalQty;
+          const totalEl = document.getElementById('total-qty');
+          if (totalEl) totalEl.innerText = totalQty;
       }
 
       // Auto advance current index if user fills a row manually
       if (rowData[index].phyid && rowData[index].to) {
         currentRowIndex = Math.max(currentRowIndex, index + 1);
       }
+    }
+
+    // Modal Fix
+    function closeModal() {
+      // Force hide with style to be sure
+      const modal = document.getElementById('confirm-modal');
+      modal.classList.add('hidden');
+      modal.style.display = 'none'; // Extra safety
+    }
+
+    function showConfirmModal(phyid, to, qty) {
+      document.getElementById('confirm-phyid').value = phyid;
+      document.getElementById('confirm-to').value = to;
+      document.getElementById('confirm-qty').value = qty;
+      
+      const modal = document.getElementById('confirm-modal');
+      modal.classList.remove('hidden');
+      modal.style.display = 'flex'; // Ensure flex display
     }
 
     function addEntry(phyid, to, qty) {

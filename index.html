@@ -428,20 +428,24 @@
 
 
       // --- To Patterns ---
-      // 1. "Ship To: 1D1807" -> ID1807
+      // 1. "Ship To: ID33" -> ID33
       // Look for "Ship To:" followed by code (IDxxxx or Dxx)
       const shipToMatch = cleanText.match(/Ship\s?To[:\s]*([A-Z0-9]{2,8})/i);
       
       // 2. "ID33 :" or "D56 :" (Code followed by colon)
-      const codeMatch = cleanText.match(/\b([A-Z][A-Z0-9]{1,4})\s?[:;]/i);
+      // Make regex stricter: Must start with ID or D followed by digits
+      const codeMatch = cleanText.match(/\b((?:ID|D)\d{1,4})\s?[:;]/i);
 
       if (shipToMatch) to = shipToMatch[1];
       else if (codeMatch) to = codeMatch[1];
 
       // Fix OCR mistakes on Result (Just in case regex missed it)
-      if (to && to.startsWith('1D')) to = to.replace('1D', 'ID');
-      if (to && to.startsWith('lD')) to = to.replace('lD', 'ID');
-      if (to && to.startsWith('|D')) to = to.replace('|D', 'ID');
+      if (to) {
+        // Force ID prefix if it looks like ID but starts with 1D/lD/|D
+        to = to.replace(/^1D/i, 'ID').replace(/^lD/i, 'ID').replace(/^\|D/i, 'ID');
+        // If it's just numbers like "33", assume "ID33" if not D code
+        if (/^\d{2,}$/.test(to)) to = "ID" + to;
+      }
       
       // PHYID Fixes
       if (phyid) {

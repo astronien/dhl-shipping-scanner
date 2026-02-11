@@ -211,21 +211,26 @@
     </div>
 
     <script>
-    function exportToPDF() {
+    async function exportToPDF() {
+      // Temporarily reveal print container on screen to render correctly
       const element = document.getElementById('print-area');
+      element.classList.remove('hidden'); // Ensure visible
+      
       const opt = {
-        margin: 10,
-        filename: 'shipping_confirm_form.pdf',
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        margin:       [10, 10, 10, 10], // Top, Left, Bottom, Right
+        filename:     `shipping_confirm_${new Date().toISOString().slice(0,10)}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, scrollY: 0 },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
       };
-      
-      // Temporary show hidden print area for PDF capture if needed, 
-      // but print-area is visible. Just need to ensure inputs are captured.
-      // html2pdf handles inputs usually.
-      
-      html2pdf().set(opt).from(element).save();
+
+      // Ensure inputs are visible in PDF
+      const inputs = element.querySelectorAll('input');
+      inputs.forEach(input => {
+        input.setAttribute('value', input.value);
+      });
+
+      await html2pdf().set(opt).from(element).save();
     }
 
     // --- Config ---

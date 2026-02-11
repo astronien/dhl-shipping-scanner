@@ -254,22 +254,43 @@
     function renderTable() {
       const tbody = document.getElementById('table-body');
       tbody.innerHTML = '';
+      let totalQty = 0;
 
       for (let i = 0; i < MAX_ROWS; i++) {
         const item = rowData[i];
+        
+        // Sum up quantity (safely)
+        if (item.qty && !isNaN(item.qty)) {
+            totalQty += parseInt(item.qty);
+        }
+
         const row = document.createElement('tr');
         row.innerHTML = `
           <td class="col-no" style="background-color: #e0e0e0;">${i + 1}</td>
           <td><input type="text" value="${item.phyid}" onchange="updateRow(${i}, 'phyid', this.value)"></td>
           <td><input type="text" value="${item.to}" onchange="updateRow(${i}, 'to', this.value)"></td>
-          <td><input type="text" value="${item.qty}" onchange="updateRow(${i}, 'qty', this.value)"></td>
+          <td><input type="number" value="${item.qty}" onchange="updateRow(${i}, 'qty', this.value)"></td>
         `;
         tbody.appendChild(row);
       }
+      
+      // Update Total
+      document.getElementById('total-qty').innerText = totalQty;
     }
 
     function updateRow(index, field, value) {
       rowData[index][field] = value;
+      
+      // Recalculate total if qty changed
+      if (field === 'qty') {
+          let totalQty = 0;
+          for (let i = 0; i < MAX_ROWS; i++) {
+            const q = rowData[i].qty;
+            if (q && !isNaN(q)) totalQty += parseInt(q);
+          }
+          document.getElementById('total-qty').innerText = totalQty;
+      }
+
       // Auto advance current index if user fills a row manually
       if (rowData[index].phyid && rowData[index].to) {
         currentRowIndex = Math.max(currentRowIndex, index + 1);

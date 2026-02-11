@@ -212,15 +212,14 @@
 
     <script>
     async function exportToPDF() {
-      // Temporarily reveal print container on screen to render correctly
       const element = document.getElementById('print-area');
-      element.classList.remove('hidden'); // Ensure visible
+      element.classList.remove('hidden'); 
       
       const opt = {
-        margin:       [10, 10, 10, 10], // Top, Left, Bottom, Right
+        margin:       [5, 0, 5, 0], // Top, Left, Bottom, Right (Minimal margins)
         filename:     `shipping_confirm_${new Date().toISOString().slice(0,10)}.pdf`,
         image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2, scrollY: 0 },
+        html2canvas:  { scale: 2, scrollY: 0, useCORS: true },
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
       };
 

@@ -253,7 +253,6 @@
     // --- Table Logic ---
     function renderTable() {
       const tbody = document.getElementById('table-body');
-      const totalEl = document.getElementById('total-qty'); // Get element directly
       tbody.innerHTML = '';
       let totalQty = 0;
 
@@ -261,7 +260,7 @@
         const item = rowData[i];
         
         // Sum up quantity (safely)
-        if (item.qty && !isNaN(item.qty)) {
+        if (item.qty && !isNaN(item.qty) && item.qty !== "") {
             totalQty += parseInt(item.qty);
         }
 
@@ -275,27 +274,22 @@
         tbody.appendChild(row);
       }
       
-      // Update Total - Ensure element exists before setting
-      if (totalEl) {
-          totalEl.innerText = totalQty;
-      } else {
-          console.error("Total element not found!");
-      }
+      // Update Total
+      const totalEl = document.getElementById('total-qty');
+      if (totalEl) totalEl.innerText = totalQty;
     }
 
     function updateRow(index, field, value) {
       rowData[index][field] = value;
       
-      // Recalculate total if qty changed
-      if (field === 'qty') {
-          let totalQty = 0;
-          for (let i = 0; i < MAX_ROWS; i++) {
-            const q = rowData[i].qty;
-            if (q && !isNaN(q)) totalQty += parseInt(q);
-          }
-          const totalEl = document.getElementById('total-qty');
-          if (totalEl) totalEl.innerText = totalQty;
+      // Recalculate total
+      let totalQty = 0;
+      for (let i = 0; i < MAX_ROWS; i++) {
+        const q = rowData[i].qty;
+        if (q && !isNaN(q) && q !== "") totalQty += parseInt(q);
       }
+      const totalEl = document.getElementById('total-qty');
+      if (totalEl) totalEl.innerText = totalQty;
 
       // Auto advance current index if user fills a row manually
       if (rowData[index].phyid && rowData[index].to) {

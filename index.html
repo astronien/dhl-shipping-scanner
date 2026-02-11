@@ -10,6 +10,8 @@
 
   <!-- Tesseract.js (Client-side OCR) -->
   <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
+  <!-- html2pdf.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
   <style>
     @media print {
@@ -131,6 +133,7 @@
     <!-- Actions -->
     <div class="flex justify-end gap-2 mb-8">
       <button onclick="clearTable()" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">🗑️ ล้างทั้งหมด</button>
+      <button onclick="exportToPDF()" class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 font-bold shadow">📄 Export PDF</button>
       <button onclick="window.print()" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 font-bold shadow">🖨️ พิมพ์เอกสาร</button>
     </div>
 
@@ -208,6 +211,23 @@
     </div>
 
     <script>
+    function exportToPDF() {
+      const element = document.getElementById('print-area');
+      const opt = {
+        margin: 10,
+        filename: 'shipping_confirm_form.pdf',
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+      
+      // Temporary show hidden print area for PDF capture if needed, 
+      // but print-area is visible. Just need to ensure inputs are captured.
+      // html2pdf handles inputs usually.
+      
+      html2pdf().set(opt).from(element).save();
+    }
+
     // --- Config ---
     const MAX_ROWS = 18;
     let rowData = Array(MAX_ROWS).fill({ phyid: "", to: "", qty: "" });

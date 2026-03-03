@@ -1,10 +1,11 @@
 <!DOCTYPE html>
 <html lang="th">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ระบบสแกนและพิมพ์ใบสินค้า</title>
-  
+
   <!-- Google Fonts: Sarabun -->
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">
 
@@ -33,16 +34,32 @@
   <!-- html2pdf.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
+  <!-- Cropper.js -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+
   <style>
     @media print {
-      body { margin: 0; padding: 0; background: white; }
-      .no-print { display: none !important; }
-      .print-only { display: block !important; }
+      body {
+        margin: 0;
+        padding: 0;
+        background: white;
+      }
+
+      .no-print {
+        display: none !important;
+      }
+
+      .print-only {
+        display: block !important;
+      }
+
       /* A4 size for printing */
       @page {
         size: A4 portrait;
         margin: 1cm;
       }
+
       .print-container {
         width: 100% !important;
         max-width: 210mm !important;
@@ -53,24 +70,33 @@
         margin: 0 auto;
         border: none;
       }
+
       .form-table {
         font-size: 14pt;
         width: 100%;
         margin-top: 15px;
       }
-      .form-table th, .form-table td {
+
+      .form-table th,
+      .form-table td {
         padding: 8px;
         height: 35px;
       }
+
       .form-table input {
         font-size: 14pt;
       }
-      .footer-note, .signatures {
+
+      .footer-note,
+      .signatures {
         margin-top: 30px;
       }
     }
-    .print-only { display: none; }
-    
+
+    .print-only {
+      display: none;
+    }
+
     /* Table styling for form */
     .form-table {
       width: 100%;
@@ -78,16 +104,20 @@
       margin-top: 10px;
       font-family: "Sarabun", sans-serif;
     }
-    .form-table th, .form-table td {
+
+    .form-table th,
+    .form-table td {
       border: 1px solid black;
       padding: 5px;
       text-align: center;
       height: 25px;
     }
+
     .form-table th {
       background-color: #d8af28;
       font-weight: bold;
     }
+
     .form-table input {
       width: 95%;
       border: none;
@@ -97,12 +127,26 @@
       outline: none;
       background: transparent;
     }
-    .col-no { width: 5%; background-color: #e0e0e0; }
-    .col-phyid { width: 45%; }
-    .col-to { width: 30%; }
-    .col-qty { width: 20%; }
+
+    .col-no {
+      width: 5%;
+      background-color: #e0e0e0;
+    }
+
+    .col-phyid {
+      width: 45%;
+    }
+
+    .col-to {
+      width: 30%;
+    }
+
+    .col-qty {
+      width: 20%;
+    }
   </style>
 </head>
+
 <body class="bg-gray-100 min-h-screen">
 
   <!-- --- App UI (Hidden when printing) --- -->
@@ -114,20 +158,23 @@
 
     <div class="bg-white p-4 rounded shadow mb-4">
       <div class="flex flex-col md:flex-row gap-4">
-        
-          <!-- Scan / Camera Input -->
-          <div class="flex-1 border-2 border-dashed border-gray-300 rounded p-6 text-center hover:bg-gray-50 transition cursor-pointer relative" onclick="document.getElementById('file-input').click()">
-            <input type="file" id="file-input" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
-            <div class="text-4xl mb-2">📸</div>
-            <p class="font-bold text-gray-700">แตะเพื่อถ่ายรูป / เลือกรูป</p>
-            <p class="text-sm text-gray-500">ใบปะหน้า DHL</p>
-          
+
+        <!-- Snap & Crop: triggers native camera -->
+        <label
+          class="flex-1 border-2 border-dashed border-blue-400 rounded p-6 text-center hover:bg-blue-50 transition cursor-pointer relative">
+          <input type="file" id="file-input" accept="image/*" capture="environment" class="hidden"
+            onchange="handleSnapCrop(event)">
+          <div class="text-4xl mb-2">📸</div>
+          <p class="font-bold text-blue-600">ถ่ายรูปแล้วครอบ</p>
+          <p class="text-sm text-orange-500">กดเพื่อถ่าย → ครอบข้อความ PHYID → อ่าน OCR</p>
+
           <!-- Loading Overlay -->
-          <div id="loading-overlay" class="absolute inset-0 bg-white/80 hidden flex-col items-center justify-center rounded">
+          <div id="loading-overlay"
+            class="absolute inset-0 bg-white/80 hidden flex-col items-center justify-center rounded">
             <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
             <p class="text-sm font-bold text-blue-600">กำลังอ่านข้อมูล...</p>
           </div>
-        </div>
+        </label>
 
         <!-- Manual Add -->
         <div class="flex-1 bg-gray-50 rounded p-4 border border-gray-200">
@@ -137,40 +184,48 @@
             <input type="text" id="manual-to" placeholder="To" class="border p-2 rounded text-sm w-full">
             <input type="number" id="manual-qty" placeholder="Qty" class="border p-2 rounded text-sm w-full" value="1">
           </div>
-          <button onclick="addManualEntry()" class="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700">➕ เพิ่มรายการ</button>
+          <button onclick="addManualEntry()" class="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700">➕
+            เพิ่มรายการ</button>
         </div>
 
       </div>
-      
+
       <!-- Scan Result Preview -->
       <div id="scan-result" class="mt-4 p-4 rounded text-sm hidden">
         <div id="scan-status" class="font-bold mb-2"></div>
-        <div id="scan-details" class="text-xs text-gray-500 bg-gray-100 p-2 rounded mt-2 hidden whitespace-pre-wrap font-mono border"></div>
-        <button onclick="toggleDetails()" class="text-xs text-blue-500 underline mt-2">ดูข้อความที่อ่านได้ (Debug)</button>
+        <div id="scan-details"
+          class="text-xs text-gray-500 bg-gray-100 p-2 rounded mt-2 hidden whitespace-pre-wrap font-mono border"></div>
+        <button onclick="toggleDetails()" class="text-xs text-blue-500 underline mt-2">ดูข้อความที่อ่านได้
+          (Debug)</button>
       </div>
     </div>
 
     <!-- Actions -->
     <div class="flex justify-end gap-2 mb-8">
-      <button onclick="showHistory()" class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 shadow mr-auto">📜 ประวัติ</button>
-      
-      <button onclick="saveToHistory()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 shadow font-bold">💾 บันทึก</button>
-      <button onclick="clearTable()" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 shadow">🗑️ ล้าง</button>
-      
-      <button onclick="exportToPDF()" class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 font-bold shadow">📄 PDF</button>
-      <button onclick="window.print()" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 font-bold shadow">🖨️ พิมพ์</button>
+      <button onclick="showHistory()"
+        class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 shadow mr-auto">📜 ประวัติ</button>
+
+      <button onclick="saveToHistory()"
+        class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 shadow font-bold">💾 บันทึก</button>
+      <button onclick="clearTable()" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 shadow">🗑️
+        ล้าง</button>
+
+      <button onclick="exportToPDF()"
+        class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 font-bold shadow">📄 PDF</button>
+      <button onclick="window.print()"
+        class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 font-bold shadow">🖨️ พิมพ์</button>
     </div>
 
     <!-- Confirm Modal -->
     <div id="confirm-modal" class="fixed inset-0 bg-black/50 hidden flex items-center justify-center z-50 p-4">
       <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
         <h3 class="text-lg font-bold mb-4">ตรวจสอบข้อมูล</h3>
-        
+
         <div class="mb-4">
           <label class="block text-sm font-bold mb-1">PHYID</label>
           <input type="text" id="confirm-phyid" class="w-full border p-2 rounded text-lg font-mono bg-gray-50">
         </div>
-        
+
         <div class="flex gap-4 mb-6">
           <div class="flex-1">
             <label class="block text-sm font-bold mb-1">To</label>
@@ -183,87 +238,119 @@
         </div>
 
         <div class="flex gap-2">
-          <button onclick="closeModal()" class="flex-1 py-3 rounded border border-gray-300 hover:bg-gray-100 text-gray-700">ยกเลิก</button>
-          <button onclick="confirmAdd()" class="flex-1 py-3 rounded bg-blue-600 hover:bg-blue-700 text-white font-bold">✅ ยืนยันเพิ่ม</button>
+          <button onclick="closeModal()"
+            class="flex-1 py-3 rounded border border-gray-300 hover:bg-gray-100 text-gray-700">ยกเลิก</button>
+          <button onclick="confirmAdd()"
+            class="flex-1 py-3 rounded bg-blue-600 hover:bg-blue-700 text-white font-bold">✅ ยืนยันเพิ่ม</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Crop Modal -->
+    <div id="crop-modal" class="fixed inset-0 bg-black z-50 hidden" style="display:none;">
+      <div class="p-4 flex justify-between items-center bg-black/50 absolute top-0 left-0 right-0 z-20">
+        <h3 class="text-white font-bold">✂️ ครอบข้อความ PHYID</h3>
+        <button onclick="closeCropModal()" class="text-white text-3xl font-bold p-2">&times;</button>
+      </div>
+
+      <div class="relative" style="margin-top:56px; margin-bottom:80px; height:calc(100vh - 136px); overflow:hidden;">
+        <img id="cropper-image" style="max-width:100%;max-height:100%;" alt="captured">
+        <div id="crop-ocr-loading" class="absolute inset-0 bg-black/70 hidden items-center justify-center z-30">
+          <div class="bg-white rounded-lg p-6 text-center shadow-xl">
+            <div class="animate-spin text-4xl mb-2">⏳</div>
+            <p class="font-bold">กำลังอ่าน OCR...</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="absolute bottom-0 left-0 right-0 p-4 bg-black/50 z-20 flex gap-3 justify-center">
+        <button onclick="closeCropModal()"
+          class="bg-gray-500 text-white px-6 py-3 rounded-full font-bold text-lg shadow-lg">❌ ยกเลิก</button>
+        <button onclick="processCroppedImage()"
+          class="bg-green-500 text-white px-6 py-3 rounded-full font-bold text-lg shadow-lg">🔍 อ่านข้อความ</button>
       </div>
     </div>
 
   </div>
 
 
-    <!-- History Modal -->
-    <div id="history-modal" class="fixed inset-0 bg-black/50 hidden flex items-center justify-center z-[100] p-4">
-      <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6 h-[80vh] flex flex-col relative z-[101]">
-        <div class="flex justify-between items-center mb-4">
-          <h3 class="text-xl font-bold">📜 ประวัติการส่งสินค้า</h3>
-          <button onclick="closeHistory()" class="text-gray-500 hover:text-gray-800 text-3xl font-bold p-2">&times;</button>
-        </div>
-        
-        <div id="history-list" class="flex-1 overflow-y-auto space-y-3 p-2 bg-gray-50 rounded border">
-          <!-- History items generated here -->
-          <p class="text-center text-gray-400 mt-10">ยังไม่มีประวัติ</p>
-        </div>
+  <!-- History Modal -->
+  <div id="history-modal" class="fixed inset-0 bg-black/50 hidden flex items-center justify-center z-[100] p-4">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6 h-[80vh] flex flex-col relative z-[101]">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-xl font-bold">📜 ประวัติการส่งสินค้า</h3>
+        <button onclick="closeHistory()"
+          class="text-gray-500 hover:text-gray-800 text-3xl font-bold p-2">&times;</button>
+      </div>
 
-        <div class="mt-4 pt-2 border-t flex justify-end">
-          <button onclick="closeHistory()" class="px-6 py-2 bg-gray-200 rounded hover:bg-gray-300 font-bold text-gray-700">ปิดหน้าต่าง</button>
-        </div>
+      <div id="history-list" class="flex-1 overflow-y-auto space-y-3 p-2 bg-gray-50 rounded border">
+        <!-- History items generated here -->
+        <p class="text-center text-gray-400 mt-10">ยังไม่มีประวัติ</p>
+      </div>
+
+      <div class="mt-4 pt-2 border-t flex justify-end">
+        <button onclick="closeHistory()"
+          class="px-6 py-2 bg-gray-200 rounded hover:bg-gray-300 font-bold text-gray-700">ปิดหน้าต่าง</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="print-container bg-white max-w-[210mm] mx-auto p-[20px] shadow-lg mb-8" id="print-area">
+
+    <div class="border border-black p-1 font-bold bg-gray-100 text-center mb-2" style="background-color: #f0f0f0;">
+      ใบยืนยันการรับสินค้า โยก และ สินค้าเคลม (ส่งซ่อม 166+33)
+    </div>
+
+    <div class="flex justify-between font-bold my-2" style="display: flex; justify-content: space-between;">
+      <div>จากสาขา ID 645</div>
+      <div id="date-display">11/2/2026</div>
+    </div>
+
+    <table class="form-table">
+      <thead>
+        <tr>
+          <th class="col-no">No</th>
+          <th class="col-phyid">PHYID</th>
+          <th class="col-to">to</th>
+          <th class="col-qty">จำนวน(กล่อง)</th>
+        </tr>
+      </thead>
+      <tbody id="table-body">
+        <!-- Rows will be generated by JS -->
+      </tbody>
+    </table>
+
+    <div class="text-center font-bold text-sm mt-2 footer-note">
+      ***สามารถเขียนบิลเพิ่มได้ (Stock Out PhyID. ของโยก)***
+    </div>
+
+    <div class="flex justify-between mt-12 px-12 signatures"
+      style="display: flex; justify-content: space-between; margin-top: 50px; padding: 0 50px;">
+      <div class="text-center">
+        <div>ผู้ส่งสินค้า(หน้าร้าน)</div>
+        <div class="mt-8 border-t border-dotted border-black w-40 mx-auto"
+          style="margin-top: 30px; border-top: 1px dotted black; width: 150px;"></div>
+      </div>
+      <div class="text-center">
+        <div>ผู้รับสินค้า(ขนส่ง)</div>
+        <div class="mt-8 border-t border-dotted border-black w-40 mx-auto"
+          style="margin-top: 30px; border-top: 1px dotted black; width: 150px;"></div>
       </div>
     </div>
 
-    <div class="print-container bg-white max-w-[210mm] mx-auto p-[20px] shadow-lg mb-8" id="print-area">
-      
-      <div class="border border-black p-1 font-bold bg-gray-100 text-center mb-2" style="background-color: #f0f0f0;">
-        ใบยืนยันการรับสินค้า โยก และ สินค้าเคลม (ส่งซ่อม 166+33)
-      </div>
+  </div>
 
-      <div class="flex justify-between font-bold my-2" style="display: flex; justify-content: space-between;">
-        <div>จากสาขา ID 645</div>
-        <div id="date-display">11/2/2026</div>
-      </div>
-
-      <table class="form-table">
-        <thead>
-          <tr>
-            <th class="col-no">No</th>
-            <th class="col-phyid">PHYID</th>
-            <th class="col-to">to</th>
-            <th class="col-qty">จำนวน(กล่อง)</th>
-          </tr>
-        </thead>
-        <tbody id="table-body">
-          <!-- Rows will be generated by JS -->
-        </tbody>
-      </table>
-
-      <div class="text-center font-bold text-sm mt-2 footer-note">
-        ***สามารถเขียนบิลเพิ่มได้ (Stock Out PhyID. ของโยก)***
-      </div>
-
-      <div class="flex justify-between mt-12 px-12 signatures" style="display: flex; justify-content: space-between; margin-top: 50px; padding: 0 50px;">
-        <div class="text-center">
-          <div>ผู้ส่งสินค้า(หน้าร้าน)</div>
-          <div class="mt-8 border-t border-dotted border-black w-40 mx-auto" style="margin-top: 30px; border-top: 1px dotted black; width: 150px;"></div>
-        </div>
-        <div class="text-center">
-          <div>ผู้รับสินค้า(ขนส่ง)</div>
-          <div class="mt-8 border-t border-dotted border-black w-40 mx-auto" style="margin-top: 30px; border-top: 1px dotted black; width: 150px;"></div>
-        </div>
-      </div>
-
-    </div>
-
-    <script>
+  <script>
     async function exportToPDF() {
       const element = document.getElementById('print-area');
-      element.classList.remove('hidden'); 
-      
+      element.classList.remove('hidden');
+
       const opt = {
-        margin:       [5, 0, 5, 0], // Top, Left, Bottom, Right (Minimal margins)
-        filename:     `shipping_confirm_${new Date().toISOString().slice(0,10)}.pdf`,
-        image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2, scrollY: 0, useCORS: true },
-        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        margin: [5, 0, 5, 0], // Top, Left, Bottom, Right (Minimal margins)
+        filename: `shipping_confirm_${new Date().toISOString().slice(0, 10)}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, scrollY: 0, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
       };
 
       // Ensure inputs are visible in PDF
@@ -281,7 +368,7 @@
     let currentRowIndex = 0;
 
     // --- Init ---
-    window.onload = function() {
+    window.onload = function () {
       renderTable();
       updateDate();
     };
@@ -301,9 +388,9 @@
 
       for (let i = 0; i < MAX_ROWS; i++) {
         const item = rowData[i];
-        
+
         if (item.qty && !isNaN(item.qty) && item.qty !== "") {
-            totalQty += parseInt(item.qty);
+          totalQty += parseInt(item.qty);
         }
 
         const row = document.createElement('tr');
@@ -315,7 +402,7 @@
         `;
         tbody.appendChild(row);
       }
-      
+
       // Add Total Row Manually inside tbody (Guaranteed to show)
       const totalRow = document.createElement('tr');
       totalRow.innerHTML = `
@@ -327,16 +414,16 @@
 
     function updateRow(index, field, value) {
       rowData[index][field] = value;
-      
+
       // Recalculate total immediately
       if (field === 'qty') {
-          let totalQty = 0;
-          for (let i = 0; i < MAX_ROWS; i++) {
-            const q = rowData[i].qty;
-            if (q && !isNaN(q) && q !== "") totalQty += parseInt(q);
-          }
-          const totalEl = document.getElementById('total-qty-cell');
-          if (totalEl) totalEl.innerText = totalQty;
+        let totalQty = 0;
+        for (let i = 0; i < MAX_ROWS; i++) {
+          const q = rowData[i].qty;
+          if (q && !isNaN(q) && q !== "") totalQty += parseInt(q);
+        }
+        const totalEl = document.getElementById('total-qty-cell');
+        if (totalEl) totalEl.innerText = totalQty;
       }
 
       // Auto advance
@@ -347,7 +434,7 @@
 
     function updateRow(index, field, value) {
       rowData[index][field] = value;
-      
+
       // Recalculate total
       let totalQty = 0;
       for (let i = 0; i < MAX_ROWS; i++) {
@@ -375,7 +462,7 @@
       document.getElementById('confirm-phyid').value = phyid;
       document.getElementById('confirm-to').value = to;
       document.getElementById('confirm-qty').value = qty;
-      
+
       const modal = document.getElementById('confirm-modal');
       modal.classList.remove('hidden');
       modal.style.display = 'flex'; // Ensure flex display
@@ -392,9 +479,9 @@
     }
 
     function clearTable() {
-      if(confirm('ยืนยันล้างข้อมูลทั้งหมด?')) {
+      if (confirm('ยืนยันล้างข้อมูลทั้งหมด?')) {
         rowData = Array(MAX_ROWS).fill({ phyid: "", to: "", qty: "" });
-        for(let i=0; i<MAX_ROWS; i++) rowData[i] = { phyid: "", to: "", qty: "" };
+        for (let i = 0; i < MAX_ROWS; i++) rowData[i] = { phyid: "", to: "", qty: "" };
         currentRowIndex = 0;
         renderTable();
         document.getElementById('scan-result').classList.add('hidden');
@@ -407,8 +494,8 @@
     function saveToHistory() {
       const activeItems = rowData.filter(r => r.phyid || r.to);
       if (activeItems.length === 0) {
-          alert('⚠️ ไม่มีข้อมูลให้บันทึก');
-          return;
+        alert('⚠️ ไม่มีข้อมูลให้บันทึก');
+        return;
       }
 
       const historyItem = {
@@ -431,25 +518,25 @@
       saveBtn.disabled = true;
 
       fetch(API_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(historyItem)
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(historyItem)
       }).then(() => {
-          alert('✅ บันทึกเรียบร้อย!');
+        alert('✅ บันทึกเรียบร้อย!');
       }).catch(err => {
-          console.error(err);
-          alert('⚠️ บันทึกออนไลน์ไม่สำเร็จ (แต่บันทึกลงเครื่องแล้ว)');
+        console.error(err);
+        alert('⚠️ บันทึกออนไลน์ไม่สำเร็จ (แต่บันทึกลงเครื่องแล้ว)');
       }).finally(() => {
-          saveBtn.innerText = originalText;
-          saveBtn.disabled = false;
+        saveBtn.innerText = originalText;
+        saveBtn.disabled = false;
       });
     }
 
     async function showHistory() {
       const modal = document.getElementById('history-modal');
       const list = document.getElementById('history-list');
-      
+
       modal.classList.remove('hidden');
       modal.classList.add('flex');
       list.innerHTML = '<p class="text-center text-gray-500 mt-10">⏳ กำลังโหลดข้อมูลจากออนไลน์...</p>';
@@ -457,13 +544,13 @@
       try {
         const response = await fetch(API_URL);
         const cloudHistory = await response.json();
-        
+
         if (!cloudHistory || cloudHistory.length === 0) {
-           // Fallback to local if empty
-           const local = JSON.parse(localStorage.getItem('dhl_history') || '[]');
-           renderHistoryList(local, "Local (Offline)");
+          // Fallback to local if empty
+          const local = JSON.parse(localStorage.getItem('dhl_history') || '[]');
+          renderHistoryList(local, "Local (Offline)");
         } else {
-           renderHistoryList(cloudHistory, "Online Cloud ☁️");
+          renderHistoryList(cloudHistory, "Online Cloud ☁️");
         }
 
       } catch (err) {
@@ -476,7 +563,7 @@
 
     function renderHistoryList(history, sourceLabel) {
       const list = document.getElementById('history-list');
-      
+
       if (history.length === 0) {
         list.innerHTML = '<p class="text-center text-gray-400 mt-10">ยังไม่มีประวัติ</p>';
         return;
@@ -514,24 +601,24 @@
       // Handle both object (from cloud) and ID (legacy local)
       let item = itemOrId;
       if (typeof itemOrId === 'number') {
-         const history = JSON.parse(localStorage.getItem('dhl_history') || '[]');
-         item = history.find(h => h.id === itemOrId);
+        const history = JSON.parse(localStorage.getItem('dhl_history') || '[]');
+        item = history.find(h => h.id === itemOrId);
       }
 
-      if(!confirm(`ต้องการโหลดข้อมูลวันที่ ${item.timestamp} มาแทนที่ข้อมูลปัจจุบัน?`)) return;
+      if (!confirm(`ต้องการโหลดข้อมูลวันที่ ${item.timestamp} มาแทนที่ข้อมูลปัจจุบัน?`)) return;
 
       if (item) {
         // Clear current
-        rowData = Array(MAX_ROWS).fill({ phyid: "", to: "", qty: "" }); 
-        for(let i=0; i<MAX_ROWS; i++) rowData[i] = { phyid: "", to: "", qty: "" };
-        
+        rowData = Array(MAX_ROWS).fill({ phyid: "", to: "", qty: "" });
+        for (let i = 0; i < MAX_ROWS; i++) rowData[i] = { phyid: "", to: "", qty: "" };
+
         // Load data
         item.items.forEach((data, index) => {
           if (index < MAX_ROWS) {
             rowData[index] = data;
           }
         });
-        
+
         currentRowIndex = item.items.length;
         renderTable();
         closeHistory();
@@ -542,7 +629,7 @@
       const phyid = document.getElementById('manual-phyid').value;
       const to = document.getElementById('manual-to').value;
       const qty = document.getElementById('manual-qty').value;
-      
+
       if (phyid && to) {
         addEntry(phyid, to, qty);
         // Clear inputs
@@ -555,54 +642,125 @@
     }
 
     // --- OCR Logic ---
+    let cropperInstance = null;
+    let tesseractWorker = null;
+
+    async function getTesseractWorker() {
+      if (!tesseractWorker) {
+        tesseractWorker = await Tesseract.createWorker('eng');
+      }
+      return tesseractWorker;
+    }
+
     function toggleDetails() {
       document.getElementById('scan-details').classList.toggle('hidden');
     }
 
-    async function handleImageUpload(event) {
+    // --- Snap & Crop: Native Camera → Crop Modal ---
+    function handleSnapCrop(event) {
       const file = event.target.files[0];
       if (!file) return;
 
-      const loading = document.getElementById('loading-overlay');
-      const resultBox = document.getElementById('scan-result');
-      const statusText = document.getElementById('scan-status');
-      const detailsText = document.getElementById('scan-details');
+      // Pre-warm OCR worker
+      getTesseractWorker();
 
-      loading.classList.remove('hidden');
-      loading.classList.add('flex');
-      resultBox.classList.add('hidden'); // Hide until finished
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const cropperImg = document.getElementById('cropper-image');
+        cropperImg.src = e.target.result;
+
+        // Open crop modal
+        const modal = document.getElementById('crop-modal');
+        modal.style.display = 'flex';
+        modal.style.flexDirection = 'column';
+
+        // Initialize Cropper.js once image loads
+        cropperImg.onload = function () {
+          if (cropperInstance) {
+            cropperInstance.destroy();
+            cropperInstance = null;
+          }
+          cropperInstance = new Cropper(cropperImg, {
+            viewMode: 1,
+            dragMode: 'move',
+            autoCropArea: 0.3,
+            aspectRatio: NaN,
+            guides: true,
+            highlight: true,
+            background: false,
+            responsive: true,
+            restore: false,
+            modal: true,
+            cropBoxMovable: true,
+            cropBoxResizable: true,
+            toggleDragModeOnDblclick: false,
+          });
+        };
+      };
+      reader.readAsDataURL(file);
+
+      // Reset file input
+      event.target.value = '';
+    }
+
+    function closeCropModal() {
+      if (cropperInstance) {
+        cropperInstance.destroy();
+        cropperInstance = null;
+      }
+      const modal = document.getElementById('crop-modal');
+      modal.style.display = 'none';
+      document.getElementById('cropper-image').src = '';
+    }
+
+    async function processCroppedImage() {
+      if (!cropperInstance) {
+        alert('กรุณาถ่ายรูปก่อน');
+        return;
+      }
+
+      const loadingOverlay = document.getElementById('crop-ocr-loading');
+      loadingOverlay.style.display = 'flex';
 
       try {
-        const worker = await Tesseract.createWorker('eng'); // English is usually enough for codes
-        const ret = await worker.recognize(file);
+        const croppedCanvas = cropperInstance.getCroppedCanvas({
+          maxWidth: 1200,
+          maxHeight: 600,
+          imageSmoothingQuality: 'high',
+        });
+
+        const croppedDataUrl = croppedCanvas.toDataURL('image/png');
+
+        const worker = await getTesseractWorker();
+        const ret = await worker.recognize(croppedDataUrl);
         const text = ret.data.text;
-        
-        console.log("OCR Result:", text);
-        detailsText.innerText = "ข้อความดิบที่อ่านได้:\n" + text;
-        
-        await worker.terminate();
 
-        // Parse Logic
+        console.log('Cropped OCR Result:', text);
+
         const parsed = parseDHLText(text);
-        
-        resultBox.classList.remove('hidden');
-        if (parsed) {
-          // Show Modal instead of adding directly
-          showConfirmModal(parsed.phyid, parsed.to, parsed.qty);
-          statusText.innerHTML = "👀 พบข้อมูล! กรุณาตรวจสอบก่อนเพิ่ม";
-          resultBox.className = "mt-4 p-4 rounded bg-blue-50 border border-blue-200 text-blue-800";
-        } else {
-          statusText.innerHTML = "❌ อ่านข้อมูลไม่พบ!<br>ลองถ่ายให้ชัดเจน หรือกรอกเองด้านบนครับ";
-          resultBox.className = "mt-4 p-4 rounded bg-red-50 border border-red-200 text-red-800";
-        }
 
+        closeCropModal();
+
+        const resultBox = document.getElementById('scan-result');
+        const statusText = document.getElementById('scan-status');
+        const detailsText = document.getElementById('scan-details');
+
+        detailsText.innerText = 'ข้อความดิบที่อ่านได้:\n' + text;
+        resultBox.classList.remove('hidden');
+
+        if (parsed) {
+          showConfirmModal(parsed.phyid, parsed.to, parsed.qty);
+          statusText.innerHTML = '👀 พบข้อมูลจากรูป! กรุณาตรวจสอบก่อนเพิ่ม';
+          resultBox.className = 'mt-4 p-4 rounded bg-blue-50 border border-blue-200 text-blue-800';
+        } else {
+          statusText.innerHTML = '❌ อ่านข้อมูลไม่พบ!<br>ลองครอบให้ตรง PHYID มากขึ้น หรือกรอกเองครับ';
+          resultBox.className = 'mt-4 p-4 rounded bg-red-50 border border-red-200 text-red-800';
+        }
       } catch (err) {
-        console.error(err);
+        console.error('Crop OCR Error:', err);
         alert('เกิดข้อผิดพลาด: ' + err.message);
       } finally {
-        loading.classList.add('hidden');
-        loading.classList.remove('flex');
-        document.getElementById('file-input').value = '';
+        loadingOverlay.style.display = 'none';
       }
     }
 
@@ -621,7 +779,7 @@
       const phyid = document.getElementById('confirm-phyid').value;
       const to = document.getElementById('confirm-to').value;
       const qty = document.getElementById('confirm-qty').value;
-      
+
       if (phyid && to) {
         addEntry(phyid, to, qty);
         closeModal();
@@ -649,20 +807,20 @@
       // --- PHYID Patterns ---
       // 1. "Ref ID: ..." (Grab the whole ID string until newline or long space)
       const refMatch = cleanText.match(/Ref\s?ID[:\s]*([^\n\r]+)/i);
-      
+
       if (refMatch) {
         let rawId = refMatch[1].trim();
         const parts = rawId.split(/\s+/);
-        if (parts.length > 0) phyid = parts[0]; 
-      } 
-      
+        if (parts.length > 0) phyid = parts[0];
+      }
+
       // Fallback: Look specifically for PHYID or SMART if Ref ID line missed
       if (!phyid) {
         // Fix: PHY1D -> PHYID explicitly before fallback
         cleanText = cleanText.replace(/PHY1D/gi, 'PHYID');
         const phyidMatch = cleanText.match(/(PHYID[\w-]+)/i);
         const smartMatch = cleanText.match(/(SMART-[\w-]+)/i);
-        
+
         if (phyidMatch) phyid = phyidMatch[1];
         else if (smartMatch) phyid = smartMatch[1];
       }
@@ -674,29 +832,29 @@
 
       // 2. "Ship To: ... ID33 ..."
       const shipToMatch = cleanText.match(/Ship\s?To[\s\S]{0,30}?\b((?:ID|D)\d{2,5})\b/i);
-      
+
       // 3. Fallback: "D56 :" (Start of line or distinct code)
       const codeMatch = cleanText.match(/(?:^|\s)((?:ID|D)\d{2,5})\s?[:;]/im);
 
       if (dCodeMatch) {
-         to = dCodeMatch[1]; // Priority 1: D56 + Exhibition pattern
+        to = dCodeMatch[1]; // Priority 1: D56 + Exhibition pattern
       } else if (shipToMatch) {
-         to = shipToMatch[1];
+        to = shipToMatch[1];
       } else if (codeMatch) {
-         to = codeMatch[1];
+        to = codeMatch[1];
       }
 
       // Fix OCR mistakes on Result (Just in case regex missed it)
       if (to) {
         // Force ID prefix if it looks like ID but starts with 1D/lD/|D
         to = to.replace(/^1D/i, 'ID').replace(/^lD/i, 'ID').replace(/^\|D/i, 'ID');
-        
+
         // Remove common misreads explicitly
         const invalidWords = ['RTSH', 'PDO', 'RS', 'VP', 'THBNA1', 'BKK1'];
         if (invalidWords.includes(to.toUpperCase())) {
-           const retryMatch = cleanText.match(/\b(D\d{2})\b/);
-           if (retryMatch) to = retryMatch[1];
-           else to = ""; 
+          const retryMatch = cleanText.match(/\b(D\d{2})\b/);
+          if (retryMatch) to = retryMatch[1];
+          else to = "";
         }
 
         // --- NEW: Fix single "D" -> "ID" ---
@@ -712,27 +870,28 @@
         // Example: "D33" should be "ID33". 
         // Let's apply this logic: If it is D + digits, and NOT D56 (which is valid), convert to ID?
         // Or maybe just blind convert D -> ID for specific numbers?
-        
+
         // Let's try: If it starts with D and is NOT D56, convert to ID.
         if (to.startsWith('D') && to !== 'D56') {
-            to = to.replace('D', 'ID');
+          to = to.replace('D', 'ID');
         }
       }
-      
+
       // PHYID Fixes
       if (phyid) {
-          if (phyid.includes('1D') && !phyid.includes('ID')) phyid = phyid.replace('PHY1D', 'PHYID');
-          // Sometimes it captures leading symbols like "-PHYID", clean it
-          phyid = phyid.replace(/^[-|/]/, '');
+        if (phyid.includes('1D') && !phyid.includes('ID')) phyid = phyid.replace('PHY1D', 'PHYID');
+        // Sometimes it captures leading symbols like "-PHYID", clean it
+        phyid = phyid.replace(/^[-|/]/, '');
       }
 
       if (phyid || to) {
         return { phyid: phyid || "?", to: to || "?", qty };
       }
-      
+
       return null;
     }
 
   </script>
 </body>
+
 </html>

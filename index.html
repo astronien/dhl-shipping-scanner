@@ -713,6 +713,76 @@
       document.getElementById('cropper-image').src = '';
     }
 
+    // --- Image Preprocessing for Better OCR ---
+    function preprocessImage(canvas) {
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width;
+      const h = canvas.height;
+      const imageData = ctx.getImageData(0, 0, w, h);
+      const data = imageData.data;
+
+      // Step 1: Convert to grayscale
+      const gray = new Uint8Array(w * h);
+      for (let i = 0; i < data.length; i += 4) {
+        gray[i / 4] = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+      }
+
+      // Step 2: Boost contrast (1.5x)
+      const contrast = 1.5;
+      for (let i = 0; i < gray.length; i++) {
+        gray[i] = Math.max(0, Math.min(255, Math.round((gray[i] - 128) * contrast + 128)));
+      }
+
+      // Step 3: Otsu's binarization (auto-find best threshold)
+      const histogram = new Array(256).fill(0);
+      for (let i = 0; i < gray.length; i++) histogram[gray[i]]++;
+
+      let total = gray.length;
+      let sum = 0;
+      for (let i = 0; i < 256; i++) sum += i * histogram[i];
+
+      let sumB = 0, wB = 0, wF = 0;
+      let maxVariance = 0, threshold = 128;
+      for (let t = 0; t < 256; t++) {
+        wB += histogram[t];
+        if (wB === 0) continue;
+        wF = total - wB;
+        if (wF === 0) break;
+        sumB += t * histogram[t];
+        let mB = sumB / wB;
+        let mF = (sum - sumB) / wF;
+        let variance = wB * wF * (mB - mF) * (mB - mF);
+        if (variance > maxVariance) {
+          maxVariance = variance;
+          threshold = t;
+        }
+      }
+
+      // Apply binarization
+      for (let i = 0; i < gray.length; i++) {
+        gray[i] = gray[i] > threshold ? 255 : 0;
+      }
+
+      // Step 4: Write back to canvas (grayscale binarized)
+      for (let i = 0; i < gray.length; i++) {
+        data[i * 4] = gray[i];
+        data[i * 4 + 1] = gray[i];
+        data[i * 4 + 2] = gray[i];
+        data[i * 4 + 3] = 255;
+      }
+      ctx.putImageData(imageData, 0, 0);
+
+      // Step 5: Upscale 2x for better OCR (small text becomes readable)
+      const upscaled = document.createElement('canvas');
+      upscaled.width = w * 2;
+      upscaled.height = h * 2;
+      const ctx2 = upscaled.getContext('2d');
+      ctx2.imageSmoothingEnabled = false; // Keep sharp edges
+      ctx2.drawImage(canvas, 0, 0, w * 2, h * 2);
+
+      return upscaled;
+    }
+
     async function processCroppedImage() {
       if (!cropperInstance) {
         alert('กรุณาถ่ายรูปก่อน');
@@ -723,16 +793,24 @@
       loadingOverlay.style.display = 'flex';
 
       try {
+        // 1. Get cropped canvas at HIGH resolution
         const croppedCanvas = cropperInstance.getCroppedCanvas({
-          maxWidth: 1200,
-          maxHeight: 600,
+          maxWidth: 2000,
+          maxHeight: 1000,
           imageSmoothingQuality: 'high',
         });
 
-        const croppedDataUrl = croppedCanvas.toDataURL('image/png');
+        // 2. Preprocess image for better OCR
+        const processedCanvas = preprocessImage(croppedCanvas);
+        const processedDataUrl = processedCanvas.toDataURL('image/png');
 
+        // 3. OCR with tuned parameters
         const worker = await getTesseractWorker();
-        const ret = await worker.recognize(croppedDataUrl);
+        await worker.setParameters({
+          tessedit_pageseg_mode: '6',  // Single block of text
+          tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-:./() ',
+        });
+        const ret = await worker.recognize(processedDataUrl);
         const text = ret.data.text;
 
         console.log('Cropped OCR Result:', text);
